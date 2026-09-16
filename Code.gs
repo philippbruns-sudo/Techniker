@@ -133,39 +133,18 @@ function uploadFile(fileData, folderIdFromForm) {
 // 3. FUNKTIONEN FÜR DAS ADMIN-DASHBOARD
 // ==========================================
 
-// Speichert ein neues Projekt im Google Sheet inkl. UK-Dateiupload
+// Speichert ein neues Projekt im Google Sheet
 function saveNewProject(data) {
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Projektliste');
     var lastRow = sheet.getLastRow();
     var newRow = lastRow + 1;
-    
-    var finalUkLink = "";
-    
-    // Prüfen, ob ein Umsetzungskonzept (UK) hochgeladen wurde
-    if (data.ukFile && data.ukFile.base64) {
-      // Ziel-Ordner-ID für UKs
-      var folderId = '1uKckGJ81X-BFDmJ-6k-09JvungwkYhX0';
-      var folder = DriveApp.getFolderById(folderId);
-      
-      var bytes = Utilities.base64Decode(data.ukFile.base64);
-      var blob = Utilities.newBlob(bytes, data.ukFile.type, data.ukFile.name);
-      
-      // Datei im Ordner erstellen
-      var file = folder.createFile(blob);
-      
-      // Link-Freigabe erteilen (damit die Techniker die Datei im Dashboard öffnen können)
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      
-      // Den Link abrufen
-      finalUkLink = file.getUrl();
-    }
-    
+
     // Bereite das Array für die Spalten B bis I vor
     var rowData = [
       data.name,            // Spalte B: Projektname
       data.id,              // Spalte C: Ordner ID
-      finalUkLink,          // Spalte D: Der generierte Link zum PDF (oder leer)
+      "",                   // Spalte D: UK Link (manuell in der Tabelle pflegen)
       data.ansprechpartner, // Spalte E: Ansprechpartner
       data.telefon,         // Spalte F: Telefon
       data.email,           // Spalte G: Email

@@ -105,23 +105,53 @@
       white-space: pre-wrap;
     }
     
-    .file-drop-zone {
-      border: 2px dashed #ff6600;
-      background-color: rgba(255, 102, 0, 0.01);
-      border-radius: 10px;
-      padding: 30px 15px;
-      text-align: center;
-      cursor: pointer;
-      position: relative;
-    }
-    .file-drop-zone input[type="file"] {
+    .visually-hidden {
       position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      opacity: 0; cursor: pointer;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
     }
-    .drop-zone-icon { font-size: 32px; color: #ff6600; margin-bottom: 8px; }
-    .drop-zone-text { font-size: 14px; color: #4a5568; font-weight: 500; }
+    button.btn-select-files {
+      width: 100%;
+      padding: 12px;
+      background-color: #fff;
+      color: #ff6600;
+      border: 2px solid #ff6600;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    button.btn-select-files:hover { background-color: #fdfaf7; }
     .selected-files-count { margin-top: 8px; font-size: 13px; color: #4caf50; font-weight: bold; }
+
+    .sort-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .sort-label { font-size: 13px; color: #4a5568; font-weight: 600; }
+    .sort-btn {
+      border: 1px solid #f3e9e2;
+      background-color: #fdfdfd;
+      color: #4a5568;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sort-btn.active {
+      background-color: #ff6600;
+      border-color: #ff6600;
+      color: white;
+    }
 
     .gallery-title {
       font-weight: 600;
@@ -301,6 +331,11 @@
     <form id="uploadForm" style="display:none;">
       <div class="form-group">
         <label for="projectSelect">Projekt auswählen</label>
+        <div class="sort-row">
+          <span class="sort-label">Sortieren:</span>
+          <button type="button" class="sort-btn active" id="sortByName">Name</button>
+          <button type="button" class="sort-btn" id="sortByPlz">Postleitzahl</button>
+        </div>
         <select id="projectSelect" required>
           <option value="" disabled selected>-- Bitte wählen --</option>
         </select>
@@ -328,12 +363,9 @@
       
       <div class="form-group" style="margin-top: 15px;">
         <label>Neue Bilder hochladen</label>
-        <div class="file-drop-zone">
-          <div class="drop-zone-icon">📷</div>
-          <div class="drop-zone-text" id="dropZoneText">Neue Bilder auswählen oder ziehen</div>
-          <div class="selected-files-count" id="filesCountText" style="display:none;"></div>
-          <input type="file" id="fileInput" accept="image/*" multiple required>
-        </div>
+        <button type="button" id="selectFilesBtn" class="btn-select-files">📷 Bilder auswählen</button>
+        <input type="file" id="fileInput" class="visually-hidden" accept="image/*" multiple required>
+        <div class="selected-files-count" id="filesCountText" style="display:none;"></div>
       </div>
 
       <div id="galleryTitle" class="gallery-title">Aktuell hochgeladene Bilder:</div>
@@ -420,42 +452,100 @@
     player.currentTime = 0;
   }
 
+  var currentSort = 'name';
+
+  function extractPlz(adresse) {
+    if (!adresse) return '';
+    var match = adresse.match(/\b\d{5}\b/);
+    return match ? match[0] : '';
+  }
+
+  function sortProjects(projects, sortBy) {
+    var sorted = projects.slice();
+    if (sortBy === 'plz') {
+      sorted.sort(function(a, b) {
+        var plzA = extractPlz(a.adresse);
+        var plzB = extractPlz(b.adresse);
+        if (!plzA && !plzB) return a.name.localeCompare(b.name, 'de');
+        if (!plzA) return 1;
+        if (!plzB) return -1;
+        return plzA.localeCompare(plzB) || a.name.localeCompare(b.name, 'de');
+      });
+    } else {
+      sorted.sort(function(a, b) {
+        return a.name.localeCompare(b.name, 'de');
+      });
+    }
+    return sorted;
+  }
+
+  function renderProjectOptions() {
+    var select = document.getElementById('projectSelect');
+    var previousValue = select.value;
+    var sorted = sortProjects(allProjectsData, currentSort);
+
+    select.innerHTML = '';
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    placeholder.textContent = '-- Bitte wählen --';
+    select.appendChild(placeholder);
+
+    sorted.forEach(function(proj) {
+      var opt = document.createElement('option');
+      opt.value = proj.id;
+      opt.textContent = proj.name;
+      select.appendChild(opt);
+    });
+
+    if (previousValue && sorted.some(function(p) { return p.id === previousValue; })) {
+      select.value = previousValue;
+    } else {
+      placeholder.selected = true;
+    }
+  }
+
+  function setSort(sortBy) {
+    currentSort = sortBy;
+    document.getElementById('sortByName').classList.toggle('active', sortBy === 'name');
+    document.getElementById('sortByPlz').classList.toggle('active', sortBy === 'plz');
+    renderProjectOptions();
+  }
+
+  document.getElementById('sortByName').addEventListener('click', function() { setSort('name'); });
+  document.getElementById('sortByPlz').addEventListener('click', function() { setSort('plz'); });
+
   function populateDropdown(projects) {
     allProjectsData = projects;
-    var select = document.getElementById('projectSelect');
     var loader = document.getElementById('loader');
     var form = document.getElementById('uploadForm');
-    
+
     if (projects.length === 0) {
       loader.innerHTML = "Keine aktiven Projekte in der Liste gefunden.";
       return;
     }
-    
-    projects.forEach(function(proj) {
-      var opt = document.createElement('option');
-      opt.value = proj.id;
-      opt.innerHTML = proj.name;
-      select.appendChild(opt);
-    });
-    
+
+    renderProjectOptions();
+
     loader.style.display = 'none';
     form.style.display = 'block';
   }
 
+  document.getElementById('selectFilesBtn').addEventListener('click', function() {
+    document.getElementById('fileInput').click();
+  });
+
   document.getElementById('fileInput').addEventListener('change', function() {
     var count = this.files.length;
-    var textElement = document.getElementById('dropZoneText');
     var countElement = document.getElementById('filesCountText');
-    
+
     document.getElementById('uploadGallery').innerHTML = "";
     document.getElementById('galleryTitle').style.display = "none";
-    
+
     if (count > 0) {
-      textElement.innerHTML = "Dateien bereit zum Upload";
       countElement.innerHTML = "✓ " + count + " " + (count === 1 ? "Bild" : "Bilder") + " ausgewählt";
       countElement.style.display = "block";
     } else {
-      textElement.innerHTML = "Bilder auswählen oder hierher ziehen";
       countElement.style.display = "none";
     }
   });
@@ -650,7 +740,6 @@
         if (errors.length === 0) {
           showStatus("Erfolgreich! Alle Bilder wurden hochgeladen.", "success");
           document.getElementById('fileInput').value = "";
-          document.getElementById('dropZoneText').innerHTML = "Neue Bilder auswählen oder ziehen";
           document.getElementById('filesCountText').style.display = "none";
           
           google.script.run

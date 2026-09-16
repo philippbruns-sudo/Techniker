@@ -87,48 +87,6 @@
       color: #e53e3e;
     }
 
-    /* NEU: Drag & Drop Zone für das UK */
-    .file-drop-zone {
-      border: 2px dashed #cbd5e1;
-      background-color: #f8fafc;
-      border-radius: 8px;
-      padding: 35px 20px;
-      text-align: center;
-      cursor: pointer;
-      position: relative;
-      transition: all 0.2s;
-    }
-    .file-drop-zone:hover, .file-drop-zone.dragover {
-      border-color: #ff6600;
-      background-color: #fffaf0;
-    }
-    .file-drop-zone input[type="file"] {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      opacity: 0; cursor: pointer;
-    }
-    .drop-zone-icon {
-      font-size: 36px;
-      margin-bottom: 10px;
-    }
-    .drop-zone-text {
-      font-size: 15px;
-      color: #4a5568;
-      font-weight: 500;
-    }
-    .drop-zone-hint {
-      font-size: 13px;
-      color: #94a3b8;
-      margin-top: 5px;
-    }
-    .selected-file-name {
-      margin-top: 10px;
-      font-size: 14px;
-      color: #ff6600;
-      font-weight: bold;
-      display: none;
-    }
-
     .form-actions {
       margin-top: 40px;
       display: flex;
@@ -241,18 +199,6 @@
           <input type="email" id="projectEmail" placeholder="mail@beispiel.de">
         </div>
 
-        <!-- NEU: Dateiupload Zone -->
-        <div class="form-group full-width">
-          <label>Umsetzungskonzept (UK)</label>
-          <div class="file-drop-zone" id="dropZone">
-            <div class="drop-zone-icon">📄</div>
-            <div class="drop-zone-text" id="dropZoneText">PDF-Dokument auswählen oder hier ablegen</div>
-            <div class="drop-zone-hint">Das Dokument wird automatisch im Google Drive gespeichert</div>
-            <div class="selected-file-name" id="fileNameDisplay"></div>
-            <input type="file" id="ukFileInput" accept=".pdf, .doc, .docx">
-          </div>
-        </div>
-
         <div class="form-group full-width">
           <label for="projectNotes">Notizen & Infos</label>
           <textarea id="projectNotes" placeholder="Zusätzliche Informationen für den Techniker..."></textarea>
@@ -262,7 +208,7 @@
       
       <div class="form-actions">
         <button type="button" class="btn-reset" onclick="resetForm()">Formular leeren</button>
-        <button type="submit" class="btn-submit" id="submitBtn">Projekt & UK speichern</button>
+        <button type="submit" class="btn-submit" id="submitBtn">Projekt speichern</button>
       </div>
     </form>
   </div>
@@ -271,55 +217,18 @@
 <div id="toastMessage" class="toast"></div>
 
 <script>
-  // Drag & Drop visuelle Effekte
-  var dropZone = document.getElementById('dropZone');
-  var fileInput = document.getElementById('ukFileInput');
-  var fileNameDisplay = document.getElementById('fileNameDisplay');
-  var dropZoneText = document.getElementById('dropZoneText');
-
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    dropZone.addEventListener(eventName, preventDefaults, false);
-  });
-  function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
-
-  ['dragenter', 'dragover'].forEach(eventName => {
-    dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
-  });
-  ['dragleave', 'drop'].forEach(eventName => {
-    dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
-  });
-
-  // Dateiname anzeigen, sobald gewählt
-  fileInput.addEventListener('change', function() {
-    if (this.files && this.files.length > 0) {
-      dropZoneText.style.display = 'none';
-      fileNameDisplay.style.display = 'block';
-      fileNameDisplay.innerText = '✓ Ausgewählt: ' + this.files[0].name;
-    } else {
-      dropZoneText.style.display = 'block';
-      fileNameDisplay.style.display = 'none';
-      fileNameDisplay.innerText = '';
-    }
-  });
-
   function resetForm() {
     document.getElementById('projectForm').reset();
-    dropZoneText.style.display = 'block';
-    fileNameDisplay.style.display = 'none';
-    fileNameDisplay.innerText = '';
   }
 
-  // Formular absenden & Datei verarbeiten
+  // Formular absenden
   document.getElementById('projectForm').addEventListener('submit', function(e) {
     e.preventDefault();
-    
+
     var submitBtn = document.getElementById('submitBtn');
     submitBtn.disabled = true;
-    submitBtn.innerText = 'Speichert Projekt & UK...';
-    
-    var file = fileInput.files[0];
-    
-    // Grunddaten sammeln
+    submitBtn.innerText = 'Speichert Projekt...';
+
     var data = {
       name: document.getElementById('projectName').value.trim(),
       id: document.getElementById('projectId').value.trim(),
@@ -327,34 +236,14 @@
       telefon: document.getElementById('projectPhone').value.trim(),
       email: document.getElementById('projectEmail').value.trim(),
       adresse: document.getElementById('projectAddress').value.trim(),
-      notizen: document.getElementById('projectNotes').value.trim(),
-      ukFile: null // Standardmäßig leer
+      notizen: document.getElementById('projectNotes').value.trim()
     };
-    
-    // Wenn ein File ausgewählt wurde, wandeln wir es erst in Base64 um
-    if (file) {
-      var reader = new FileReader();
-      reader.onload = function(evt) {
-        data.ukFile = {
-          base64: evt.target.result.split(',')[1],
-          type: file.type,
-          name: file.name
-        };
-        sendDataToBackend(data, submitBtn);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      // Wenn kein UK ausgewählt wurde, sofort senden
-      sendDataToBackend(data, submitBtn);
-    }
-  });
-  
-  function sendDataToBackend(data, submitBtn) {
+
     google.script.run
       .withSuccessHandler(function(response) {
         submitBtn.disabled = false;
-        submitBtn.innerText = 'Projekt & UK speichern';
-        
+        submitBtn.innerText = 'Projekt speichern';
+
         if(response.status === 'success') {
           showToast(response.message, 'success');
           resetForm();
@@ -364,12 +253,12 @@
       })
       .withFailureHandler(function(error) {
         submitBtn.disabled = false;
-        submitBtn.innerText = 'Projekt & UK speichern';
+        submitBtn.innerText = 'Projekt speichern';
         showToast('Systemfehler: ' + error.message, 'error');
       })
       .saveNewProject(data);
-  }
-  
+  });
+
   function showToast(message, type) {
     var toast = document.getElementById('toastMessage');
     toast.innerText = message;
