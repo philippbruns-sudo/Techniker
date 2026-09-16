@@ -84,16 +84,12 @@
     }
     .project-list {
       display: none;
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      right: 0;
-      max-height: 320px;
+      position: fixed;
       overflow-y: auto;
       background: white;
       border: 1px solid #f3e9e2;
       border-radius: 10px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
       z-index: 50;
     }
     .project-list.open { display: block; }
@@ -600,7 +596,31 @@
     });
   }
 
+  function positionProjectList() {
+    var input = document.getElementById('projectSearchInput');
+    var list = document.getElementById('projectList');
+    var rect = input.getBoundingClientRect();
+    var margin = 6;
+    var viewportPadding = 12;
+    var spaceBelow = window.innerHeight - rect.bottom - margin - viewportPadding;
+    var spaceAbove = rect.top - margin - viewportPadding;
+
+    list.style.left = rect.left + 'px';
+    list.style.width = rect.width + 'px';
+
+    if (spaceBelow >= 160 || spaceBelow >= spaceAbove) {
+      list.style.top = (rect.bottom + margin) + 'px';
+      list.style.bottom = 'auto';
+      list.style.maxHeight = Math.max(160, spaceBelow) + 'px';
+    } else {
+      list.style.bottom = (window.innerHeight - rect.top + margin) + 'px';
+      list.style.top = 'auto';
+      list.style.maxHeight = Math.max(160, spaceAbove) + 'px';
+    }
+  }
+
   function openProjectList() {
+    positionProjectList();
     document.getElementById('projectList').classList.add('open');
   }
 
@@ -621,6 +641,12 @@
     var picker = document.getElementById('projectPicker');
     if (!picker.contains(e.target)) {
       closeProjectList();
+    }
+  });
+
+  window.addEventListener('resize', function() {
+    if (document.getElementById('projectList').classList.contains('open')) {
+      positionProjectList();
     }
   });
 
