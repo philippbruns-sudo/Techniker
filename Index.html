@@ -46,7 +46,10 @@
       color: #ff6600;
       font-size: 14px;
     }
-    select {
+    .project-picker {
+      position: relative;
+    }
+    .project-search-input {
       width: 100%;
       padding: 12px;
       border: 2px solid #f3e9e2;
@@ -56,12 +59,40 @@
       color: #333;
       background-color: #fdfdfd;
       transition: border-color 0.2s;
+      cursor: pointer;
     }
-    select:focus {
+    .project-search-input.placeholder-active { color: #94a3b8; }
+    .project-search-input:focus {
       border-color: #ff6600;
       outline: none;
     }
-    
+    .project-list {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      max-height: 320px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid #f3e9e2;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      z-index: 50;
+    }
+    .project-list.open { display: block; }
+    .project-list-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid #f7f2ee;
+    }
+    .project-list-item:last-child { border-bottom: none; }
+    .project-list-item:hover { background-color: #fdfaf7; }
+    .project-list-item .p-name { font-weight: 600; color: #002d56; font-size: 14.5px; }
+    .project-list-item .p-address { font-size: 12.5px; color: #718096; margin-top: 2px; }
+    .project-list-item .p-plz { color: #ff6600; font-weight: 700; }
+    .project-list-empty { padding: 14px; text-align: center; color: #94a3b8; font-size: 13px; }
+
     .info-card {
       background-color: #fdfaf7;
       border-left: 4px solid #ff6600;
@@ -330,15 +361,16 @@
     
     <form id="uploadForm" style="display:none;">
       <div class="form-group">
-        <label for="projectSelect">Projekt auswählen</label>
+        <label for="projectSearchInput">Projekt auswählen</label>
         <div class="sort-row">
           <span class="sort-label">Sortieren:</span>
           <button type="button" class="sort-btn active" id="sortByName">Name</button>
           <button type="button" class="sort-btn" id="sortByPlz">Postleitzahl</button>
         </div>
-        <select id="projectSelect" required>
-          <option value="" disabled selected>-- Bitte wählen --</option>
-        </select>
+        <div class="project-picker" id="projectPicker">
+          <input type="text" id="projectSearchInput" class="project-search-input placeholder-active" placeholder="-- Bitte wählen --" readonly autocomplete="off">
+          <div class="project-list" id="projectList"></div>
+        </div>
       </div>
       
       <div id="projectInfoBox" class="info-card">
@@ -453,11 +485,32 @@
   }
 
   var currentSort = 'name';
+  var selectedProjectId = '';
 
   function extractPlz(adresse) {
     if (!adresse) return '';
     var match = adresse.match(/\b\d{5}\b/);
     return match ? match[0] : '';
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function formatAddressLine(proj) {
+    var addr = proj.adresse || '';
+    if (!addr) return '<span style="color:#cbd5e1;">Keine Adresse hinterlegt</span>';
+    var escaped = escapeHtml(addr);
+    var plz = extractPlz(addr);
+    if (plz) {
+      escaped = escaped.replace(plz, '<span class="p-plz">' + plz + '</span>');
+    }
+    return escaped;
   }
 
   function sortProjects(projects, sortBy) {
@@ -479,37 +532,71 @@
     return sorted;
   }
 
-  function renderProjectOptions() {
-    var select = document.getElementById('projectSelect');
-    var previousValue = select.value;
+  function renderProjectList() {
+    var listEl = document.getElementById('projectList');
     var sorted = sortProjects(allProjectsData, currentSort);
 
-    select.innerHTML = '';
-    var placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.disabled = true;
-    placeholder.textContent = '-- Bitte wählen --';
-    select.appendChild(placeholder);
+    listEl.innerHTML = '';
+
+    if (sorted.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'project-list-empty';
+      empty.textContent = 'Keine Projekte gefunden.';
+      listEl.appendChild(empty);
+      return;
+    }
 
     sorted.forEach(function(proj) {
-      var opt = document.createElement('option');
-      opt.value = proj.id;
-      opt.textContent = proj.name;
-      select.appendChild(opt);
-    });
+      var item = document.createElement('div');
+      item.className = 'project-list-item';
 
-    if (previousValue && sorted.some(function(p) { return p.id === previousValue; })) {
-      select.value = previousValue;
-    } else {
-      placeholder.selected = true;
-    }
+      var nameEl = document.createElement('div');
+      nameEl.className = 'p-name';
+      nameEl.textContent = proj.name;
+
+      var addressEl = document.createElement('div');
+      addressEl.className = 'p-address';
+      addressEl.innerHTML = formatAddressLine(proj);
+
+      item.appendChild(nameEl);
+      item.appendChild(addressEl);
+      item.addEventListener('click', function() {
+        selectProject(proj.id);
+        closeProjectList();
+      });
+      listEl.appendChild(item);
+    });
   }
+
+  function openProjectList() {
+    document.getElementById('projectList').classList.add('open');
+  }
+
+  function closeProjectList() {
+    document.getElementById('projectList').classList.remove('open');
+  }
+
+  document.getElementById('projectSearchInput').addEventListener('click', function() {
+    var list = document.getElementById('projectList');
+    if (list.classList.contains('open')) {
+      closeProjectList();
+    } else {
+      openProjectList();
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    var picker = document.getElementById('projectPicker');
+    if (!picker.contains(e.target)) {
+      closeProjectList();
+    }
+  });
 
   function setSort(sortBy) {
     currentSort = sortBy;
     document.getElementById('sortByName').classList.toggle('active', sortBy === 'name');
     document.getElementById('sortByPlz').classList.toggle('active', sortBy === 'plz');
-    renderProjectOptions();
+    renderProjectList();
   }
 
   document.getElementById('sortByName').addEventListener('click', function() { setSort('name'); });
@@ -525,7 +612,7 @@
       return;
     }
 
-    renderProjectOptions();
+    renderProjectList();
 
     loader.style.display = 'none';
     form.style.display = 'block';
@@ -550,24 +637,28 @@
     }
   });
 
-  document.getElementById('projectSelect').addEventListener('change', function() {
-    var selectedId = this.value;
-    var project = allProjectsData.find(function(p) { return p.id === selectedId; });
+  function selectProject(id) {
+    selectedProjectId = id;
+    var project = allProjectsData.find(function(p) { return p.id === id; });
     var infoBox = document.getElementById('projectInfoBox');
-    
+    var searchInput = document.getElementById('projectSearchInput');
+
     document.getElementById('uploadGallery').innerHTML = "";
     document.getElementById('galleryTitle').style.display = "none";
     document.getElementById('summaryTile').style.display = "none";
     currentFolderImages = [];
-    
+
     var loadingText = document.getElementById('loadingImages');
-    
+
     if (project) {
+      searchInput.value = project.name;
+      searchInput.classList.remove('placeholder-active');
+
       document.getElementById('infoAddress').innerText = project.adresse || "Nicht angegeben";
       document.getElementById('infoContact').innerText = project.ansprechpartner || "Nicht angegeben";
       document.getElementById('infoPhone').innerText = project.telefon || "Nicht angegeben";
       document.getElementById('infoEmail').innerText = project.email || "Nicht angegeben";
-      
+
       var pdfContainer = document.getElementById('pdfContainer');
       var pdfButton = document.getElementById('pdfButton');
       if (project.ukLink && project.ukLink.trim() !== "") {
@@ -578,7 +669,7 @@
       } else {
         pdfContainer.style.display = "none";
       }
-      
+
       var notizenContainer = document.getElementById('notizenContainer');
       if (project.notizen && project.notizen.trim() !== "") {
         document.getElementById('infoNotes').innerText = project.notizen;
@@ -586,20 +677,20 @@
       } else {
         notizenContainer.style.display = "none";
       }
-      
+
       infoBox.style.display = 'block';
       document.getElementById('statusBox').style.display = 'none';
-      
+
       loadingText.style.display = "block";
       google.script.run
         .withSuccessHandler(updateImageCountOnly)
         .withFailureHandler(function() { loadingText.style.display = "none"; })
-        .getExistingImages(selectedId);
-        
+        .getExistingImages(id);
+
     } else {
       infoBox.style.display = 'none';
     }
-  });
+  }
 
   function updateImageCountOnly(images) {
     document.getElementById('loadingImages').style.display = "none";
@@ -704,13 +795,17 @@
     e.preventDefault();
     var fileInput = document.getElementById('fileInput');
     var files = fileInput.files;
-    var folderId = document.getElementById('projectSelect').value;
+    var folderId = selectedProjectId;
     var submitBtn = document.getElementById('submitBtn');
     var gallery = document.getElementById('uploadGallery');
     var galleryTitle = document.getElementById('galleryTitle');
     var dimmer = document.getElementById('uploadDimmer');
     var dimmerStatus = document.getElementById('dimmerStatus');
-    
+
+    if (!folderId) {
+      showStatus("Bitte zuerst ein Projekt auswählen.", "error");
+      return;
+    }
     if (files.length === 0) { return; }
     
     // Wachhalter 1 (Bildschirm entsperrt halten) & Wachhalter 2 (Lautlose Audio-Schleife für iOS)
