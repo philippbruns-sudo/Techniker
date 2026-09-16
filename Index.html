@@ -3,6 +3,9 @@
 <head>
   <base target="_top">
   <style>
+    html, body {
+      height: 100%;
+    }
     body {
       font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
       background-color: #fcfbfa;
@@ -10,8 +13,9 @@
       padding: 15px;
       display: flex;
       justify-content: center;
-      align-items: center;
+      align-items: flex-start;
       min-height: 100vh;
+      box-sizing: border-box;
     }
     .app-container {
       background: white;
@@ -22,6 +26,15 @@
       box-sizing: border-box;
       overflow: hidden;
       border-top: 5px solid #ff6600;
+    }
+    @media (min-width: 700px) {
+      .app-container { max-width: 640px; }
+    }
+    @media (min-width: 1000px) {
+      .app-container { max-width: 860px; }
+    }
+    @media (min-width: 1400px) {
+      .app-container { max-width: 1080px; }
     }
     .app-header {
       text-align: center;
@@ -35,6 +48,9 @@
     }
     .app-body {
       padding: 20px 25px 25px 25px;
+    }
+    @media (min-width: 700px) {
+      .app-body { padding: 30px 45px 40px 45px; }
     }
     .form-group {
       margin-bottom: 20px;
@@ -195,7 +211,7 @@
     }
     .upload-gallery {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
       gap: 10px;
       margin-top: 5px;
       margin-bottom: 15px;
