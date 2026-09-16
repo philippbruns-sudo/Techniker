@@ -162,6 +162,7 @@
 
     .sort-row {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
       margin-bottom: 8px;
@@ -366,6 +367,7 @@
           <span class="sort-label">Sortieren:</span>
           <button type="button" class="sort-btn active" id="sortByName">Name</button>
           <button type="button" class="sort-btn" id="sortByPlz">Postleitzahl</button>
+          <button type="button" class="sort-btn" id="sortByStrasse">Straße</button>
         </div>
         <div class="project-picker" id="projectPicker">
           <input type="text" id="projectSearchInput" class="project-search-input placeholder-active" placeholder="-- Bitte wählen --" readonly autocomplete="off">
@@ -493,6 +495,11 @@
     return match ? match[0] : '';
   }
 
+  function extractStrasse(adresse) {
+    if (!adresse) return '';
+    return adresse.split(',')[0].trim();
+  }
+
   function escapeHtml(str) {
     return String(str)
       .replace(/&/g, '&amp;')
@@ -523,6 +530,15 @@
         if (!plzA) return 1;
         if (!plzB) return -1;
         return plzA.localeCompare(plzB) || a.name.localeCompare(b.name, 'de');
+      });
+    } else if (sortBy === 'strasse') {
+      sorted.sort(function(a, b) {
+        var strasseA = extractStrasse(a.adresse);
+        var strasseB = extractStrasse(b.adresse);
+        if (!strasseA && !strasseB) return a.name.localeCompare(b.name, 'de');
+        if (!strasseA) return 1;
+        if (!strasseB) return -1;
+        return strasseA.localeCompare(strasseB, 'de') || a.name.localeCompare(b.name, 'de');
       });
     } else {
       sorted.sort(function(a, b) {
@@ -596,11 +612,13 @@
     currentSort = sortBy;
     document.getElementById('sortByName').classList.toggle('active', sortBy === 'name');
     document.getElementById('sortByPlz').classList.toggle('active', sortBy === 'plz');
+    document.getElementById('sortByStrasse').classList.toggle('active', sortBy === 'strasse');
     renderProjectList();
   }
 
   document.getElementById('sortByName').addEventListener('click', function() { setSort('name'); });
   document.getElementById('sortByPlz').addEventListener('click', function() { setSort('plz'); });
+  document.getElementById('sortByStrasse').addEventListener('click', function() { setSort('strasse'); });
 
   function populateDropdown(projects) {
     allProjectsData = projects;
