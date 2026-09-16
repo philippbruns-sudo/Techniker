@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      background-color: #fcfbfa;
+      margin: 0;
+      padding: 15px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .app-container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(255, 102, 0, 0.08);
+      width: 100%;
+      max-width: 480px;
+      box-sizing: border-box;
+      overflow: hidden;
+      border-top: 5px solid #ff6600;
+    }
+    .app-header {
+      text-align: center;
+      padding: 25px 20px 15px 20px;
+      background-color: #ffffff;
+    }
+    .logo {
+      max-width: 220px;
+      height: auto;
+      margin-bottom: 10px;
+    }
+    .app-body {
+      padding: 20px 25px 25px 25px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #ff6600;
+      font-size: 14px;
+    }
+    select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #f3e9e2;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+      color: #333;
+      background-color: #fdfdfd;
+      transition: border-color 0.2s;
+    }
+    select:focus {
+      border-color: #ff6600;
+      outline: none;
+    }
+    
+    .info-card {
+      background-color: #fdfaf7;
+      border-left: 4px solid #ff6600;
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: none;
+    }
+    .info-card p {
+      margin: 6px 0;
+      color: #4a5568;
+    }
+    
+    .btn-pdf {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 12px;
+      background-color: #ff6600;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+      margin-top: 10px;
+      font-size: 14px;
+      box-shadow: 0 4px 10px rgba(255, 102, 0, 0.15);
+      transition: background-color 0.2s;
+    }
+    .btn-pdf:hover { background-color: #e65c00; }
+    
+    .notizen-box {
+      background-color: #fffaf0;
+      border: 1px solid #ffe8cc;
+      border-radius: 6px;
+      padding: 12px;
+      margin-top: 10px;
+      color: #c26100;
+      font-size: 13.5px;
+      white-space: pre-wrap;
+    }
+    
+    .file-drop-zone {
+      border: 2px dashed #ff6600;
+      background-color: rgba(255, 102, 0, 0.01);
+      border-radius: 10px;
+      padding: 30px 15px;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+    }
+    .file-drop-zone input[type="file"] {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+    .drop-zone-icon { font-size: 32px; color: #ff6600; margin-bottom: 8px; }
+    .drop-zone-text { font-size: 14px; color: #4a5568; font-weight: 500; }
+    .selected-files-count { margin-top: 8px; font-size: 13px; color: #4caf50; font-weight: bold; }
+
+    .gallery-title {
+      font-weight: 600;
+      color: #002d56;
+      font-size: 14px;
+      margin-top: 20px;
+      margin-bottom: 8px;
+      display: none;
+    }
+    .upload-gallery {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 5px;
+      margin-bottom: 15px;
+    }
+    .gallery-item {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 2px solid #e2e8f0;
+      background-color: #f7fafc;
+      cursor: pointer;
+    }
+    .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+    .gallery-success-badge {
+      position: absolute; bottom: 4px; right: 4px;
+      background-color: #4caf50; color: white;
+      border-radius: 50%; width: 18px; height: 18px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: bold;
+    }
+    
+    .loading-images-text {
+      font-size: 13px; color: #ff6600; font-style: italic;
+      margin-top: 10px; text-align: center; display: none;
+    }
+
+    .summary-tile {
+      background-color: #002d56;
+      color: white;
+      border-radius: 12px;
+      padding: 15px;
+      margin-top: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 15px rgba(0, 45, 86, 0.15);
+      display: none;
+    }
+    .summary-info h4 { margin: 0; font-size: 13px; color: #cbd5e1; font-weight: 500; text-transform: uppercase; }
+    .summary-info p { margin: 4px 0 0 0; font-size: 20px; font-weight: 700; color: #ff6600; }
+    .btn-view-gallery {
+      background-color: #ff6600;
+      color: white;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-view-gallery:hover { background-color: #e65c00; }
+
+    /* Bildschirmfüllende Lightbox (Galerie) */
+    .swipe-lightbox {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0, 0, 0, 0.95);
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+    }
+    .lightbox-close {
+      position: absolute; top: 20px; right: 20px;
+      color: white; font-size: 35px; cursor: pointer; font-weight: bold;
+      width: 45px; height: 45px; display: flex; align-items: center; justify-content: center;
+    }
+    .lightbox-counter {
+      position: absolute; top: 25px; left: 20px;
+      color: #94a3b8; font-size: 15px; font-weight: 600;
+    }
+    .lightbox-slider {
+      width: 100%; max-width: 600px; height: 75vh;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    .lightbox-img {
+      max-width: 95%; max-height: 100%;
+      object-fit: contain; transition: transform 0.2s ease-out;
+    }
+    .lightbox-nav {
+      position: absolute; width: 100%; display: flex;
+      justify-content: space-between; padding: 0 10px; box-sizing: border-box;
+      pointer-events: none;
+    }
+    .lightbox-btn {
+      background: rgba(255,255,255,0.1); color: white; border: none;
+      width: 40px; height: 40px; border-radius: 50%; font-size: 20px;
+      cursor: pointer; pointer-events: auto; display: flex; align-items: center; justify-content: center;
+    }
+    .lightbox-hint {
+      position: absolute; bottom: 20px; color: #64748b; font-size: 12px;
+    }
+
+    button.btn-upload {
+      width: 100%; padding: 14px; background-color: #4caf50; color: white;
+      border: none; border-radius: 8px; font-size: 16px; font-weight: bold;
+      cursor: pointer; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.2);
+      margin-top: 15px;
+    }
+    button:disabled { background-color: #cbd5e1 !important; cursor: not-allowed; box-shadow: none !important;}
+    
+    .status-msg { margin-top: 15px; padding: 12px; border-radius: 8px; text-align: center; display: none; font-weight: 600; font-size: 14px; }
+    .success { background-color: #d4edda; color: #155724; display: block; }
+    .error { background-color: #f8d7da; color: #721c24; display: block; }
+    .loading { background-color: #e2f0fe; color: #185a9d; display: block; }
+    .project-loading { text-align: center; color: #ff6600; font-weight: 600; padding: 20px; }
+
+    /* Abdunkelungs-Effekt */
+    .uploading-dimmer {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.75);
+      z-index: 999;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      text-align: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .dimmer-spinner {
+      width: 50px; height: 50px;
+      border: 5px solid rgba(255,255,255,0.2);
+      border-top: 5px solid #ff6600;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NEU: Unsichtbarer HTML5-Player, der ein lautloses Audio abspielt -->
+<audio id="silentAudioPlayer" loop style="display: none;">
+  <!-- Base64 kodierter lautloser Audio-Track (1 Sekunde Stille), um Datenabruf über das Web zu vermeiden -->
+  <source src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAG" type="audio/wav">
+</audio>
+
+<!-- Abdunkelungs-Schnittstelle während des Uploads -->
+<div id="uploadDimmer" class="uploading-dimmer">
+  <div class="dimmer-spinner"></div>
+  <h3 style="margin: 0 0 10px 0; color: #ff6600;">Upload läuft...</h3>
+  <p style="margin: 0; font-size: 14px; color: #e2e8f0; line-height: 1.5;" id="dimmerStatus">Bitte lassen Sie die App geöffnet.<br>Der Bildschirm bleibt automatisch aktiv.</p>
+</div>
+
+<div class="app-container">
+  <div class="app-header">
+    <img src="https://www.smartparking.com/wp-content/uploads/2025/04/logo.svg" alt="Smart Parking Logo" class="logo">
+  </div>
+  
+  <div class="app-body">
+    <div id="loader" class="project-loading">Projekte werden geladen...</div>
+    
+    <form id="uploadForm" style="display:none;">
+      <div class="form-group">
+        <label for="projectSelect">Projekt auswählen</label>
+        <select id="projectSelect" required>
+          <option value="" disabled selected>-- Bitte wählen --</option>
+        </select>
+      </div>
+      
+      <div id="projectInfoBox" class="info-card">
+        <p><strong>Adresse:</strong> <span id="infoAddress">-</span></p>
+        <p><strong>Ansprechpartner:</strong> <span id="infoContact">-</span></p>
+        <p><strong>Telefon:</strong> <span id="infoPhone">-</span></p>
+        <p><strong>E-Mail:</strong> <span id="infoEmail">-</span></p>
+        
+        <div id="pdfContainer" style="display:none; margin-top: 10px;">
+          <a id="pdfButton" href="#" target="_blank" class="btn-pdf">
+            <span>📄</span> Umsetzungskonzept öffnen
+          </a>
+        </div>
+        
+        <div id="notizenContainer" style="display:none; margin-top: 12px;">
+          <strong>Notizen:</strong>
+          <div id="infoNotes" class="notizen-box"></div>
+        </div>
+      </div>
+
+      <div id="loadingImages" class="loading-images-text">Prüfe vorhandene Bilder im Ordner...</div>
+      
+      <div class="form-group" style="margin-top: 15px;">
+        <label>Neue Bilder hochladen</label>
+        <div class="file-drop-zone">
+          <div class="drop-zone-icon">📷</div>
+          <div class="drop-zone-text" id="dropZoneText">Neue Bilder auswählen oder ziehen</div>
+          <div class="selected-files-count" id="filesCountText" style="display:none;"></div>
+          <input type="file" id="fileInput" accept="image/*" multiple required>
+        </div>
+      </div>
+
+      <div id="galleryTitle" class="gallery-title">Aktuell hochgeladene Bilder:</div>
+      <div id="uploadGallery" class="upload-gallery"></div>
+      
+      <button type="submit" id="submitBtn" class="btn-upload">Bilder hochladen</button>
+
+      <div id="summaryTile" class="summary-tile">
+        <div class="summary-info">
+          <h4>Bilder im Ordner</h4>
+          <p id="summaryCount">0 Fotos</p>
+        </div>
+        <button type="button" id="btnViewGallery" class="btn-view-gallery">Bilder durchschauen</button>
+      </div>
+    </form>
+    
+    <div id="statusBox" class="status-msg"></div>
+  </div>
+</div>
+
+<!-- Vollbild Lightbox Struktur -->
+<div id="lightbox" class="swipe-lightbox">
+  <div class="lightbox-close" onclick="closeLightbox()">&times;</div>
+  <div id="lightboxCounter" class="lightbox-counter">0 / 0</div>
+  <div class="lightbox-slider">
+    <img id="lightboxImg" class="lightbox-img" src="" alt="Vorschau">
+    <div class="lightbox-nav">
+      <button type="button" class="lightbox-btn" onclick="prevImage()">&#10094;</button>
+      <button type="button" class="lightbox-btn" onclick="nextImage()">&#10095;</button>
+    </div>
+  </div>
+  <div class="lightbox-hint">← Wischen zum Navigieren →</div>
+</div>
+
+<script>
+  var allProjectsData = [];
+  var currentFolderImages = [];
+  var lightboxIndex = 0;
+  var wakeLock = null;
+
+  window.onload = function() {
+    google.script.run
+      .withSuccessHandler(populateDropdown)
+      .withFailureHandler(function(err) {
+        showStatus("Fehler beim Laden der Projektliste: " + err, "error");
+      })
+      .getProjects();
+    
+    initSwipeDetection();
+  };
+
+  // 1. Bildschirm wach halten über Wake Lock
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock aktiv.');
+      }
+    } catch (err) {
+      console.warn('Wake Lock fehlgeschlagen: ' + err.message);
+    }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLock !== null) {
+      wakeLock.release();
+      wakeLock = null;
+      console.log('Wake Lock deaktiviert.');
+    }
+  }
+
+  // 2. NEU: Audio-Wachhalter starten (Für iOS Hintergrund-Aktivität)
+  function startSilentAudio() {
+    var player = document.getElementById('silentAudioPlayer');
+    player.play().catch(function(e) {
+      console.warn("Audio-Wiedergabe durch Browser-Sicherheitsregel verzögert:", e);
+    });
+  }
+
+  // 3. NEU: Audio-Wachhalter stoppen
+  function stopSilentAudio() {
+    var player = document.getElementById('silentAudioPlayer');
+    player.pause();
+    player.currentTime = 0;
+  }
+
+  function populateDropdown(projects) {
+    allProjectsData = projects;
+    var select = document.getElementById('projectSelect');
+    var loader = document.getElementById('loader');
+    var form = document.getElementById('uploadForm');
+    
+    if (projects.length === 0) {
+      loader.innerHTML = "Keine aktiven Projekte in der Liste gefunden.";
+      return;
+    }
+    
+    projects.forEach(function(proj) {
+      var opt = document.createElement('option');
+      opt.value = proj.id;
+      opt.innerHTML = proj.name;
+      select.appendChild(opt);
+    });
+    
+    loader.style.display = 'none';
+    form.style.display = 'block';
+  }
+
+  document.getElementById('fileInput').addEventListener('change', function() {
+    var count = this.files.length;
+    var textElement = document.getElementById('dropZoneText');
+    var countElement = document.getElementById('filesCountText');
+    
+    document.getElementById('uploadGallery').innerHTML = "";
+    document.getElementById('galleryTitle').style.display = "none";
+    
+    if (count > 0) {
+      textElement.innerHTML = "Dateien bereit zum Upload";
+      countElement.innerHTML = "✓ " + count + " " + (count === 1 ? "Bild" : "Bilder") + " ausgewählt";
+      countElement.style.display = "block";
+    } else {
+      textElement.innerHTML = "Bilder auswählen oder hierher ziehen";
+      countElement.style.display = "none";
+    }
+  });
+
+  document.getElementById('projectSelect').addEventListener('change', function() {
+    var selectedId = this.value;
+    var project = allProjectsData.find(function(p) { return p.id === selectedId; });
+    var infoBox = document.getElementById('projectInfoBox');
+    
+    document.getElementById('uploadGallery').innerHTML = "";
+    document.getElementById('galleryTitle').style.display = "none";
+    document.getElementById('summaryTile').style.display = "none";
+    currentFolderImages = [];
+    
+    var loadingText = document.getElementById('loadingImages');
+    
+    if (project) {
+      document.getElementById('infoAddress').innerText = project.adresse || "Nicht angegeben";
+      document.getElementById('infoContact').innerText = project.ansprechpartner || "Nicht angegeben";
+      document.getElementById('infoPhone').innerText = project.telefon || "Nicht angegeben";
+      document.getElementById('infoEmail').innerText = project.email || "Nicht angegeben";
+      
+      var pdfContainer = document.getElementById('pdfContainer');
+      var pdfButton = document.getElementById('pdfButton');
+      if (project.ukLink && project.ukLink.trim() !== "") {
+        var url = project.ukLink.trim();
+        if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; }
+        pdfButton.href = url;
+        pdfContainer.style.display = "block";
+      } else {
+        pdfContainer.style.display = "none";
+      }
+      
+      var notizenContainer = document.getElementById('notizenContainer');
+      if (project.notizen && project.notizen.trim() !== "") {
+        document.getElementById('infoNotes').innerText = project.notizen;
+        notizenContainer.style.display = "block";
+      } else {
+        notizenContainer.style.display = "none";
+      }
+      
+      infoBox.style.display = 'block';
+      document.getElementById('statusBox').style.display = 'none';
+      
+      loadingText.style.display = "block";
+      google.script.run
+        .withSuccessHandler(updateImageCountOnly)
+        .withFailureHandler(function() { loadingText.style.display = "none"; })
+        .getExistingImages(selectedId);
+        
+    } else {
+      infoBox.style.display = 'none';
+    }
+  });
+
+  function updateImageCountOnly(images) {
+    document.getElementById('loadingImages').style.display = "none";
+    currentFolderImages = images || [];
+    
+    var summaryTile = document.getElementById('summaryTile');
+    var summaryCount = document.getElementById('summaryCount');
+    
+    summaryCount.innerText = currentFolderImages.length + (currentFolderImages.length === 1 ? " Foto" : " Fotos");
+    summaryTile.style.display = "flex";
+  }
+
+  document.getElementById('btnViewGallery').addEventListener('click', function() {
+    if(currentFolderImages.length > 0) {
+      openLightbox(0);
+    } else {
+      alert("Es sind noch keine Bilder in diesem Ordner vorhanden.");
+    }
+  });
+
+  /* LIGHTBOX, PREFETCHING & SWIPE */
+  function openLightbox(index) {
+    if (currentFolderImages.length === 0) return;
+    lightboxIndex = index;
+    document.getElementById('lightbox').style.display = "flex";
+    updateLightboxImage();
+  }
+
+  document.getElementById('lightbox').addEventListener('click', function(e) {
+    if (e.target.id === 'lightbox' || e.target.className === 'lightbox-slider') {
+      closeLightbox();
+    }
+  });
+
+  function closeLightbox() {
+    document.getElementById('lightbox').style.display = "none";
+  }
+
+  function updateLightboxImage() {
+    var imgData = currentFolderImages[lightboxIndex];
+    var imgElement = document.getElementById('lightboxImg');
+    var counterElement = document.getElementById('lightboxCounter');
+    
+    var currentUrl = 'https://drive.google.com/thumbnail?id=' + imgData.id + '&sz=w500';
+    imgElement.src = currentUrl;
+    counterElement.innerText = (lightboxIndex + 1) + " / " + currentFolderImages.length;
+    
+    if (lightboxIndex < currentFolderImages.length - 1) {
+      var nextImgData = currentFolderImages[lightboxIndex + 1];
+      var preloadNext = new Image();
+      preloadNext.src = 'https://drive.google.com/thumbnail?id=' + nextImgData.id + '&sz=w500';
+    }
+    
+    if (lightboxIndex > 0) {
+      var prevImgData = currentFolderImages[lightboxIndex - 1];
+      var preloadPrev = new Image();
+      preloadPrev.src = 'https://drive.google.com/thumbnail?id=' + prevImgData.id + '&sz=w500';
+    }
+  }
+
+  function nextImage() {
+    if (lightboxIndex < currentFolderImages.length - 1) {
+      lightboxIndex++;
+    } else {
+      lightboxIndex = 0;
+    }
+    updateLightboxImage();
+  }
+
+  function prevImage() {
+    if (lightboxIndex > 0) {
+      lightboxIndex--;
+    } else {
+      lightboxIndex = currentFolderImages.length - 1;
+    }
+    updateLightboxImage();
+  }
+
+  function initSwipeDetection() {
+    var lightbox = document.getElementById('lightbox');
+    var touchstartX = 0;
+    var touchendX = 0;
+    
+    lightbox.addEventListener('touchstart', function(event) {
+      touchstartX = event.changedTouches[0].screenX;
+    }, {passive: true});
+    
+    lightbox.addEventListener('touchend', function(event) {
+      touchendX = event.changedTouches[0].screenX;
+      handleSwipe();
+    }, {passive: true});
+    
+    function handleSwipe() {
+      var threshold = 50;
+      if (touchendX < touchstartX - threshold) { nextImage(); }
+      if (touchendX > touchstartX + threshold) { prevImage(); }
+    }
+  }
+
+  /* UPLOAD LOGIK MIT DOPPELTEM WACHHALTER (WAKE LOCK + LAUTLOS-AUDIO) */
+  document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var fileInput = document.getElementById('fileInput');
+    var files = fileInput.files;
+    var folderId = document.getElementById('projectSelect').value;
+    var submitBtn = document.getElementById('submitBtn');
+    var gallery = document.getElementById('uploadGallery');
+    var galleryTitle = document.getElementById('galleryTitle');
+    var dimmer = document.getElementById('uploadDimmer');
+    var dimmerStatus = document.getElementById('dimmerStatus');
+    
+    if (files.length === 0) { return; }
+    
+    // Wachhalter 1 (Bildschirm entsperrt halten) & Wachhalter 2 (Lautlose Audio-Schleife für iOS)
+    await requestWakeLock();
+    startSilentAudio();
+    
+    dimmer.style.display = "flex";
+    submitBtn.disabled = true;
+    gallery.innerHTML = "";
+    galleryTitle.style.display = "block";
+    
+    var currentFileIndex = 0;
+    var totalFiles = files.length;
+    var uploadedCount = 0;
+    var errors = [];
+
+    function uploadNext() {
+      if (currentFileIndex >= totalFiles) {
+        submitBtn.disabled = false;
+        
+        // Beide Wachhalter wieder freigeben
+        releaseWakeLock();
+        stopSilentAudio();
+        
+        dimmer.style.display = "none";
+        
+        if (errors.length === 0) {
+          showStatus("Erfolgreich! Alle Bilder wurden hochgeladen.", "success");
+          document.getElementById('fileInput').value = "";
+          document.getElementById('dropZoneText').innerHTML = "Neue Bilder auswählen oder ziehen";
+          document.getElementById('filesCountText').style.display = "none";
+          
+          google.script.run
+            .withSuccessHandler(function(updatedImages) {
+              updateImageCountOnly(updatedImages);
+              gallery.innerHTML = "";
+              galleryTitle.style.display = "none";
+            })
+            .getExistingImages(folderId);
+            
+        } else {
+          showStatus(uploadedCount + " von " + totalFiles + " hochgeladen. Fehler bei einigen Bildern.", "error");
+        }
+        return;
+      }
+
+      var file = files[currentFileIndex];
+      var statusText = "Lade Bild " + (currentFileIndex + 1) + " von " + totalFiles + " hoch...<br><span style='font-size:12px; color:#a0aec0;'>(" + file.name + ")</span>";
+      
+      showStatus(statusText, "loading");
+      dimmerStatus.innerHTML = statusText + "<br><br><span style='font-size:11px; color:#cbd5e1;'> </span>";
+
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        var fileData = {
+          base64: evt.target.result.split(',')[1],
+          type: file.type,
+          name: file.name
+        };
+
+        var galleryItem = document.createElement('div');
+        galleryItem.className = 'gallery-item';
+        galleryItem.id = 'img-placeholder-' + currentFileIndex;
+        
+        var imgElement = document.createElement('img');
+        imgElement.src = evt.target.result;
+        galleryItem.appendChild(imgElement);
+        gallery.appendChild(galleryItem);
+
+        google.script.run
+          .withSuccessHandler(function(response) {
+            var item = document.getElementById('img-placeholder-' + responseContextIndex);
+            if (response.status === 'success') {
+              uploadedCount++;
+              var badge = document.createElement('div');
+              badge.className = 'gallery-success-badge';
+              badge.innerHTML = '✓';
+              item.appendChild(badge);
+            } else {
+              errors.push(file.name);
+              item.style.opacity = "0.3";
+            }
+            currentFileIndex++;
+            uploadNext();
+          })
+          .withFailureHandler(function() {
+            var item = document.getElementById('img-placeholder-' + responseContextIndex);
+            item.style.opacity = "0.3";
+            currentFileIndex++;
+            uploadNext();
+          })
+          .uploadFile(fileData, folderId);
+      };
+
+      var responseContextIndex = currentFileIndex; 
+      reader.readAsDataURL(file);
+    }
+
+    uploadNext();
+  });
+
+  function showStatus(text, type) {
+    var box = document.getElementById('statusBox');
+    box.className = "status-msg " + type;
+    box.innerHTML = text;
+    box.style.display = "block";
+  }
+</script>
+
+</body>
+</html>
