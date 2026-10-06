@@ -1,0 +1,7 @@
+# Backups enthalten API-Schlüssel
+backups/
+*.backup.json
+arvoo*.json
+
+# Firmware-Dateien
+firmware/

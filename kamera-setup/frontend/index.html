@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Smart Parking - Kamera-Setup</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      background-color: #fcfbfa;
+      margin: 0;
+      padding: 15px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      box-sizing: border-box;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .app-container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(255, 102, 0, 0.08);
+      width: 100%;
+      max-width: 720px;
+      box-sizing: border-box;
+      overflow: hidden;
+      border-top: 5px solid #ff6600;
+    }
+    .app-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 25px;
+      border-bottom: 1px solid #f3e9e2;
+    }
+    .logo { max-width: 180px; height: auto; }
+    .logo-fallback { font-weight: 700; color: #002d56; font-size: 20px; display: none; }
+    .header-title { text-align: right; }
+    .header-title h1 { margin: 0; font-size: 18px; color: #002d56; }
+    .header-title .subtitle { font-size: 13px; color: #64748b; }
+    .app-body { padding: 25px; }
+
+    .screen { display: none; }
+    .screen.active { display: block; animation: fadeIn 0.25s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* ---------- Ladebildschirm ---------- */
+    .boot-screen {
+      position: fixed; inset: 0;
+      background-color: #002d56;
+      display: flex; flex-direction: column;
+      justify-content: center; align-items: center;
+      color: white; text-align: center; z-index: 1000;
+      transition: opacity 0.4s;
+    }
+    .boot-screen.hidden { opacity: 0; pointer-events: none; }
+    .boot-logo-box {
+      background: white; border-radius: 16px; padding: 20px 30px; margin-bottom: 35px;
+      border-top: 5px solid #ff6600;
+    }
+    .boot-logo-box img { max-width: 220px; display: block; }
+    .boot-logo-box .logo-fallback { font-size: 24px; }
+    .boot-screen h3 { margin: 0 0 8px 0; color: #ff6600; }
+    .boot-screen p { margin: 0; font-size: 14px; color: #cbd5e1; }
+
+    .spinner {
+      width: 50px; height: 50px;
+      border: 5px solid rgba(255,255,255,0.2);
+      border-top: 5px solid #ff6600;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    .spinner.light { border-color: #f3e9e2; border-top-color: #ff6600; }
+    .spinner.small { width: 18px; height: 18px; border-width: 3px; margin: 0; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* ---------- Warten auf Kamera ---------- */
+    .waiting { text-align: center; padding: 20px 0 10px 0; }
+    .cam-pulse {
+      width: 120px; height: 120px; margin: 0 auto 25px auto;
+      border-radius: 50%;
+      background-color: #fdfaf7;
+      border: 3px solid #ff6600;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 54px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(255, 102, 0, 0.35); }
+      70%  { box-shadow: 0 0 0 25px rgba(255, 102, 0, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 102, 0, 0); }
+    }
+    .waiting h2 { margin: 0 0 8px 0; color: #002d56; font-size: 24px; }
+    .waiting p { margin: 0; color: #4a5568; font-size: 15px; line-height: 1.5; }
+    .search-hint {
+      display: inline-flex; align-items: center; gap: 10px;
+      margin-top: 20px; padding: 10px 16px;
+      background-color: #fdfaf7; border-left: 4px solid #ff6600; border-radius: 6px;
+      font-size: 14px; color: #c26100; font-weight: 600;
+    }
+
+    /* ---------- Info-Karte (Kameradaten) ---------- */
+    .info-card {
+      background-color: #fdfaf7;
+      border-left: 4px solid #ff6600;
+      border-radius: 6px;
+      padding: 12px 15px;
+      margin-bottom: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px 20px;
+    }
+    .info-item small { display: block; font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.04em; }
+    .info-item span { font-size: 15px; color: #002d56; font-weight: 600; font-family: Consolas, 'Courier New', monospace; }
+
+    /* ---------- Gesamtfortschritt ---------- */
+    .progress-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .progress-head label { font-weight: 600; color: #ff6600; font-size: 14px; }
+    .progress-head span { font-size: 13px; color: #64748b; font-weight: 600; }
+    .progress-bar { height: 10px; background-color: #f3e9e2; border-radius: 5px; overflow: hidden; margin-bottom: 20px; }
+    .progress-bar .fill { height: 100%; width: 0; background-color: #ff6600; border-radius: 5px; transition: width 0.4s ease-out; }
+    .progress-bar.done .fill { background-color: #4caf50; }
+    .progress-bar.error .fill { background-color: #e53e3e; }
+
+    /* ---------- Schrittliste ---------- */
+    .steps { list-style: none; margin: 0; padding: 0; }
+    .step {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 12px 14px; margin-bottom: 8px;
+      border: 2px solid #f3e9e2; border-radius: 10px;
+      background-color: #fdfdfd;
+      transition: all 0.2s;
+    }
+    .step-icon {
+      flex: 0 0 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: bold;
+      background-color: #e2e8f0; color: #94a3b8;
+    }
+    .step-text { flex: 1; min-width: 0; }
+    .step-label { font-size: 15px; font-weight: 600; color: #94a3b8; }
+    .step-detail { font-size: 13px; color: #64748b; margin-top: 3px; word-break: break-word; }
+    .step-detail:empty { display: none; }
+    .step-progress { height: 6px; background-color: #f3e9e2; border-radius: 3px; margin-top: 8px; overflow: hidden; display: none; }
+    .step-progress .fill { height: 100%; width: 0; background-color: #ff6600; transition: width 0.4s; }
+
+    .step.running { border-color: #ff6600; background-color: #fffaf0; box-shadow: 0 4px 10px rgba(255, 102, 0, 0.12); }
+    .step.running .step-icon { background-color: transparent; }
+    .step.running .step-label { color: #002d56; }
+    .step.running .step-progress.show { display: block; }
+
+    .step.done .step-icon { background-color: #4caf50; color: white; }
+    .step.done .step-label { color: #002d56; }
+
+    .step.error { border-color: #e53e3e; background-color: #fff5f5; }
+    .step.error .step-icon { background-color: #e53e3e; color: white; }
+    .step.error .step-label { color: #721c24; }
+    .step.error .step-detail { color: #721c24; font-weight: 600; }
+
+    .step.skipped .step-icon { background-color: #cbd5e1; color: white; }
+
+    /* ---------- Ergebnis ---------- */
+    .result { text-align: center; padding: 10px 0 5px 0; }
+    .result-badge {
+      width: 110px; height: 110px; border-radius: 50%;
+      margin: 0 auto 20px auto;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 60px; color: white; font-weight: bold;
+      animation: pop 0.4s ease-out;
+    }
+    .result-badge.ok { background-color: #4caf50; box-shadow: 0 8px 25px rgba(76, 175, 80, 0.3); }
+    .result-badge.fail { background-color: #e53e3e; box-shadow: 0 8px 25px rgba(229, 62, 62, 0.3); }
+    @keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 80% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+    .result h2 { margin: 0 0 6px 0; font-size: 26px; }
+    .result.ok h2 { color: #155724; }
+    .result.fail h2 { color: #721c24; }
+    .result > p { margin: 0 0 20px 0; color: #4a5568; font-size: 15px; }
+    .result .info-card { text-align: left; }
+    .error-box {
+      background-color: #f8d7da; color: #721c24;
+      border-radius: 8px; padding: 14px; margin-bottom: 20px;
+      font-size: 14px; text-align: left; font-weight: 600;
+    }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 18px;
+      border: none; border-radius: 10px;
+      font-size: 18px; font-weight: bold; font-family: inherit;
+      cursor: pointer; color: white;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background-color: #ff6600; box-shadow: 0 4px 10px rgba(255, 102, 0, 0.2); }
+    .btn-primary:hover { background-color: #e65c00; }
+    .btn-success { background-color: #4caf50; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.2); }
+    .btn-success:hover { background-color: #43a047; }
+    .btn-secondary { background-color: white; color: #002d56; border: 2px solid #cbd5e1; font-size: 16px; padding: 14px; }
+    .btn-secondary:hover { border-color: #002d56; }
+    .btn:disabled { background-color: #cbd5e1 !important; color: white; cursor: not-allowed; box-shadow: none !important; }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .mt { margin-top: 20px; }
+
+    /* ---------- Fußleiste / Tageszähler ---------- */
+    .summary-tile {
+      background-color: #002d56;
+      color: white;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-top: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 15px rgba(0, 45, 86, 0.15);
+    }
+    .summary-info h4 { margin: 0; font-size: 12px; color: #cbd5e1; font-weight: 500; text-transform: uppercase; }
+    .summary-info p { margin: 4px 0 0 0; font-size: 20px; font-weight: 700; color: #ff6600; }
+    .summary-info p .ok { color: #4caf50; }
+    .summary-info p .err { color: #fc8181; }
+    .conn { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cbd5e1; }
+    .conn-dot { width: 10px; height: 10px; border-radius: 50%; background-color: #4caf50; }
+    .conn.offline .conn-dot { background-color: #e53e3e; }
+    .demo-tag { background-color: #ff6600; color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; margin-left: 8px; }
+
+    /* ---------- Bestätigungsdialog ---------- */
+    .dimmer {
+      position: fixed; inset: 0;
+      background-color: rgba(0,0,0,0.75);
+      z-index: 999; display: none;
+      justify-content: center; align-items: center;
+      padding: 20px; box-sizing: border-box;
+    }
+    .dimmer.show { display: flex; }
+    .dialog {
+      background: white; border-radius: 16px; border-top: 5px solid #ff6600;
+      max-width: 420px; width: 100%; padding: 25px; text-align: center;
+    }
+    .dialog h3 { margin: 0 0 10px 0; color: #002d56; }
+    .dialog p { margin: 0 0 20px 0; color: #4a5568; font-size: 15px; line-height: 1.5; }
+
+    @media (max-width: 520px) {
+      .app-body { padding: 18px; }
+      .header-title .subtitle { display: none; }
+      .btn-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Ladebildschirm beim Start -->
+<div id="bootScreen" class="boot-screen">
+  <div class="boot-logo-box">
+    <img src="https://www.smartparking.com/wp-content/uploads/2025/04/logo.svg" alt="Smart Parking Logo"
+         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    <div class="logo-fallback">Smart Parking</div>
+  </div>
+  <div class="spinner"></div>
+  <h3 id="bootTitle">Kamera-Setup wird gestartet...</h3>
+  <p id="bootStatus">Verbindung zur Setup-Station wird hergestellt.</p>
+</div>
+
+<!-- Bestätigung für Abbrechen -->
+<div id="confirmDimmer" class="dimmer">
+  <div class="dialog">
+    <h3>Einrichtung abbrechen?</h3>
+    <p>Die Kamera bleibt im aktuellen Zustand. Ein laufendes Firmware-Update sollte <strong>nicht</strong> abgebrochen werden.</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="hideConfirm()">Weiter einrichten</button>
+      <button class="btn btn-primary" style="background-color:#e53e3e" onclick="confirmCancel()">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<div class="app-container">
+  <div class="app-header">
+    <img src="https://www.smartparking.com/wp-content/uploads/2025/04/logo.svg" alt="Smart Parking Logo" class="logo"
+         onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='block';">
+    <div id="logoFallback" class="logo-fallback">Smart Parking</div>
+    <div class="header-title">
+      <h1>Kamera-Setup<span id="demoTag" class="demo-tag" style="display:none;">DEMO</span></h1>
+      <span class="subtitle">ARVOO Ruby</span>
+    </div>
+  </div>
+
+  <div class="app-body">
+
+    <!-- 1. Warten auf Kamera -->
+    <div id="screenWaiting" class="screen">
+      <div class="waiting">
+        <div class="cam-pulse">📷</div>
+        <h2>Kamera anschließen</h2>
+        <p>Neue Kamera per LAN mit der Setup-Station verbinden.<br>Die Einrichtung startet automatisch, sobald sie erkannt wird.</p>
+        <div class="search-hint">
+          <div class="spinner light small"></div>
+          <span>Suche Kamera auf <span id="defaultIp">192.168.0.21</span> ...</span>
+        </div>
+      </div>
+      <button class="btn btn-primary mt" onclick="api.start()">▶ Einrichtung manuell starten</button>
+    </div>
+
+    <!-- 2. Einrichtung läuft -->
+    <div id="screenRunning" class="screen">
+      <div class="info-card" id="cameraInfo"></div>
+
+      <div class="progress-head">
+        <label>Fortschritt</label>
+        <span id="progressText">0 / 0</span>
+      </div>
+      <div class="progress-bar" id="progressBar"><div class="fill"></div></div>
+
+      <ul class="steps" id="stepList"></ul>
+
+      <button class="btn btn-secondary mt" id="btnCancel" onclick="showConfirm()">Abbrechen</button>
+    </div>
+
+    <!-- 3. Fertig -->
+    <div id="screenDone" class="screen">
+      <div class="result ok">
+        <div class="result-badge ok">✓</div>
+        <h2>Kamera fertig eingerichtet</h2>
+        <p>Alle Schritte erfolgreich geprüft. Die Kamera kann abgesteckt werden.</p>
+        <div class="info-card" id="doneInfo"></div>
+      </div>
+      <button class="btn btn-success" onclick="api.next()">📷 Nächste Kamera</button>
+    </div>
+
+    <!-- 4. Fehler -->
+    <div id="screenError" class="screen">
+      <div class="result fail">
+        <div class="result-badge fail">!</div>
+        <h2>Einrichtung fehlgeschlagen</h2>
+        <p id="errorStepText">Schritt fehlgeschlagen.</p>
+        <div class="error-box" id="errorMessage"></div>
+        <div class="info-card" id="errorInfo"></div>
+      </div>
+      <ul class="steps" id="errorStepList" style="margin-bottom: 15px;"></ul>
+      <button class="btn btn-primary" onclick="api.retry()">↻ Ab diesem Schritt wiederholen</button>
+      <button class="btn btn-secondary" style="margin-top: 12px;" onclick="api.next()">Überspringen &amp; nächste Kamera</button>
+    </div>
+
+    <!-- Tageszähler / Verbindung -->
+    <div class="summary-tile">
+      <div class="summary-info">
+        <h4>Heute eingerichtet</h4>
+        <p><span class="ok" id="statOk">0</span> ✓ &nbsp; <span class="err" id="statErr">0</span> ✗</p>
+      </div>
+      <div class="conn" id="connState"><div class="conn-dot"></div><span>Setup-Station verbunden</span></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/*
+ * Frontend der Kamera-Setup-Station.
+ *
+ * Die Seite fragt jede Sekunde GET /api/status ab und zeigt den Zustand an.
+ * Aktionen: POST /api/start, /api/cancel, /api/retry, /api/next.
+ * Das Format ist in kamera-setup/README.md beschrieben.
+ *
+ * Demo-Modus (ohne Backend): Seite als Datei öffnen oder ?demo anhängen.
+ * ?demo=error simuliert einen Fehler beim Backup.
+ */
+
+var params = new URLSearchParams(location.search);
+var DEMO = location.protocol === 'file:' || params.has('demo');
+var POLL_MS = 1000;
+
+var STATE_SCREENS = {
+  waiting: 'screenWaiting',
+  running: 'screenRunning',
+  done: 'screenDone',
+  error: 'screenError'
+};
+
+var STATUS_ICONS = { pending: '', done: '✓', error: '✕', skipped: '–' };
+
+var lastState = null;
+var cancelPending = false;
+
+// ==========================================
+// 1. VERBINDUNG ZUM BACKEND
+// ==========================================
+
+var api = {
+  status: function() { return DEMO ? demo.status() : request('GET', '/api/status'); },
+  start:  function() { return action('start'); },
+  cancel: function() { return action('cancel'); },
+  retry:  function() { return action('retry'); },
+  next:   function() { return action('next'); }
+};
+
+function request(method, url) {
+  return fetch(url, { method: method, cache: 'no-store' }).then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  });
+}
+
+function action(name) {
+  var p = DEMO ? Promise.resolve(demo[name]()) : request('POST', '/api/' + name);
+  return p.then(refresh).catch(function(e) { setOnline(false, e.message); });
+}
+
+function refresh() {
+  return api.status().then(function(s) {
+    setOnline(true);
+    render(s);
+    return s;
+  });
+}
+
+function poll() {
+  refresh()
+    .catch(function(e) { setOnline(false, e.message); })
+    .then(function() { setTimeout(poll, POLL_MS); });
+}
+
+function setOnline(online, msg) {
+  var el = document.getElementById('connState');
+  el.classList.toggle('offline', !online);
+  el.querySelector('span').innerText = online
+    ? (DEMO ? 'Demo-Modus' : 'Setup-Station verbunden')
+    : 'Keine Verbindung' + (msg ? ' (' + msg + ')' : '');
+}
+
+// ==========================================
+// 2. ANZEIGE
+// ==========================================
+
+function render(s) {
+  if (s.state !== lastState) {
+    Object.keys(STATE_SCREENS).forEach(function(k) {
+      document.getElementById(STATE_SCREENS[k]).classList.toggle('active', k === s.state);
+    });
+    lastState = s.state;
+    window.scrollTo(0, 0);
+  }
+
+  document.getElementById('statOk').innerText = s.stats ? s.stats.ok : 0;
+  document.getElementById('statErr').innerText = s.stats ? s.stats.error : 0;
+  if (s.config && s.config.default_ip) document.getElementById('defaultIp').innerText = s.config.default_ip;
+
+  var steps = s.steps || [];
+  var info = cameraInfoHtml(s.camera);
+
+  if (s.state === 'running') {
+    document.getElementById('cameraInfo').innerHTML = info;
+    document.getElementById('cameraInfo').style.display = info ? '' : 'none';
+    renderSteps('stepList', steps);
+    renderProgress(steps, s.state);
+    var firmwareRunning = steps.some(function(st) { return st.key === 'firmware' && st.status === 'running'; });
+    document.getElementById('btnCancel').disabled = cancelPending || firmwareRunning;
+  }
+  if (s.state === 'done') {
+    document.getElementById('doneInfo').innerHTML = info;
+  }
+  if (s.state === 'error') {
+    var failed = steps.filter(function(st) { return st.status === 'error'; })[0];
+    document.getElementById('errorStepText').innerText = failed
+      ? 'Fehler bei Schritt: ' + failed.label
+      : 'Die Einrichtung wurde abgebrochen.';
+    document.getElementById('errorMessage').innerText = (s.error && s.error.message) || (failed && failed.detail) || 'Unbekannter Fehler';
+    document.getElementById('errorInfo').innerHTML = info;
+    document.getElementById('errorInfo').style.display = info ? '' : 'none';
+    renderSteps('errorStepList', steps);
+  }
+  if (s.state !== 'running') cancelPending = false;
+}
+
+function cameraInfoHtml(c) {
+  if (!c) return '';
+  var fields = [
+    ['MAC', c.mac], ['Seriennummer', c.serial], ['IP', c.ip],
+    ['Name', c.name], ['Firmware', c.version_before && c.version_after && c.version_before !== c.version_after
+      ? c.version_before + ' → ' + c.version_after
+      : (c.version_after || c.version_before)]
+  ];
+  return fields.filter(function(f) { return f[1]; }).map(function(f) {
+    return '<div class="info-item"><small>' + f[0] + '</small><span>' + escapeHtml(f[1]) + '</span></div>';
+  }).join('');
+}
+
+function renderSteps(listId, steps) {
+  var html = steps.map(function(st) {
+    var icon = st.status === 'running' ? '<div class="spinner light small"></div>' : (STATUS_ICONS[st.status] || '');
+    var hasProgress = typeof st.progress === 'number';
+    return '<li class="step ' + st.status + '">' +
+      '<div class="step-icon">' + icon + '</div>' +
+      '<div class="step-text">' +
+        '<div class="step-label">' + escapeHtml(st.label) + '</div>' +
+        '<div class="step-detail">' + escapeHtml(st.detail || '') + '</div>' +
+        '<div class="step-progress' + (hasProgress ? ' show' : '') + '"><div class="fill" style="width:' + (st.progress || 0) + '%"></div></div>' +
+      '</div></li>';
+  }).join('');
+  var list = document.getElementById(listId);
+  if (list.innerHTML !== html) list.innerHTML = html;
+}
+
+function renderProgress(steps, state) {
+  var done = steps.filter(function(st) { return st.status === 'done' || st.status === 'skipped'; }).length;
+  var running = steps.filter(function(st) { return st.status === 'running'; })[0];
+  var partial = running && typeof running.progress === 'number' ? running.progress / 100 : 0;
+  var pct = steps.length ? ((done + partial) / steps.length) * 100 : 0;
+  var bar = document.getElementById('progressBar');
+  bar.querySelector('.fill').style.width = pct + '%';
+  document.getElementById('progressText').innerText = done + ' / ' + steps.length + ' Schritte';
+}
+
+function escapeHtml(t) {
+  return String(t).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function showConfirm() { document.getElementById('confirmDimmer').classList.add('show'); }
+function hideConfirm() { document.getElementById('confirmDimmer').classList.remove('show'); }
+function confirmCancel() { hideConfirm(); cancelPending = true; api.cancel(); }
+
+// ==========================================
+// 3. DEMO-MODUS (simuliert das Backend)
+// ==========================================
+
+var demo = (function() {
+  var STEPS = [
+    ['detect',   'Kamera suchen (192.168.0.21)', 1500],
+    ['login',    'MAC auslesen & anmelden',      1500],
+    ['password', 'Passwort ändern',              1500],
+    ['name',     'Name „CAM 1“ setzen',          1200],
+    ['backup',   'Backup einspielen',            2500],
+    ['newip',    'Neue IP prüfen (192.168.8.21)', 4000],
+    ['firmware', 'Firmware-Update',              8000],
+    ['verify',   'Abschlussprüfung',             1500]
+  ];
+  var DETAILS = {
+    detect: 'Kamera antwortet', login: 'Passwort aus MAC …A1B2 abgeleitet', password: 'Login mit neuem Passwort geprüft',
+    name: 'Name zurückgelesen: CAM 1', backup: 'ANPR, Base und Netzwerk übertragen', newip: '192.168.8.21 antwortet, Einstellungen stimmen',
+    firmware: 'Version 4.12.0 installiert', verify: 'Alle Werte geprüft'
+  };
+  var failAt = params.get('demo') === 'error' ? 'backup' : null;
+  var s, timer, stepStart;
+
+  function reset() {
+    clearTimeout(timer);
+    s = {
+      state: 'waiting',
+      camera: null,
+      steps: STEPS.map(function(d) { return { key: d[0], label: d[1], status: 'pending', detail: '', progress: null }; }),
+      error: null,
+      stats: s ? s.stats : { ok: 0, error: 0 },
+      config: { default_ip: '192.168.0.21' }
+    };
+    timer = setTimeout(start, 4000); // simuliert: Kamera wird angesteckt
+  }
+
+  function start() {
+    if (s.state !== 'waiting') return;
+    clearTimeout(timer);
+    s.state = 'running';
+    s.camera = { mac: '00:1A:2B:3C:A1:B2' };
+    runFrom(0);
+  }
+
+  function runFrom(i) {
+    if (i >= s.steps.length) { s.state = 'done'; s.stats.ok++; return; }
+    var st = s.steps[i];
+    st.status = 'running';
+    st.detail = st.key === 'firmware' ? 'Datei wird hochgeladen ...' : (st.key === 'newip' ? 'Kamera startet neu, warte auf 192.168.8.21 ...' : '');
+    st.progress = st.key === 'firmware' ? 0 : null;
+    stepStart = Date.now();
+    tick(i);
+  }
+
+  function tick(i) {
+    var st = s.steps[i];
+    var dur = STEPS[i][2];
+    var elapsed = Date.now() - stepStart;
+    if (st.key === 'firmware') {
+      st.progress = Math.min(100, Math.round(elapsed / dur * 100));
+      st.detail = st.progress < 40 ? 'Datei wird hochgeladen ... ' + st.progress + ' %' : 'Wird installiert ... ' + st.progress + ' %';
+    }
+    if (elapsed < dur) { timer = setTimeout(function() { tick(i); }, 200); return; }
+
+    if (st.key === failAt) {
+      st.status = 'error';
+      st.detail = 'Kamera hat das Backup abgelehnt (HTTP 400)';
+      s.error = { step: st.key, message: 'POST /system/actions/all_settings: HTTP 400 – ungültige Einstellungen' };
+      s.state = 'error';
+      s.stats.error++;
+      failAt = null; // beim Wiederholen klappt es
+      return;
+    }
+    st.status = 'done';
+    st.progress = null;
+    st.detail = DETAILS[st.key];
+    if (st.key === 'login') { s.camera.serial = 'RB-24-00817'; s.camera.version_before = '4.10.2'; }
+    if (st.key === 'name') s.camera.name = 'CAM 1';
+    if (st.key === 'newip') s.camera.ip = '192.168.8.21';
+    if (st.key === 'firmware') s.camera.version_after = '4.12.0';
+    runFrom(i + 1);
+  }
+
+  reset();
+
+  return {
+    status: function() { return Promise.resolve(JSON.parse(JSON.stringify(s))); },
+    start: start,
+    cancel: function() {
+      clearTimeout(timer);
+      var cur = s.steps.filter(function(st) { return st.status === 'running'; })[0];
+      if (cur) { cur.status = 'error'; cur.detail = 'Vom Benutzer abgebrochen'; }
+      s.error = { message: 'Vom Benutzer abgebrochen' };
+      s.state = 'error';
+      s.stats.error++;
+    },
+    retry: function() {
+      var i = s.steps.findIndex(function(st) { return st.status === 'error'; });
+      if (i < 0) return;
+      s.state = 'running';
+      s.error = null;
+      s.stats.error--;
+      runFrom(i);
+    },
+    next: reset
+  };
+})();
+
+// ==========================================
+// 4. START
+// ==========================================
+
+if (DEMO) document.getElementById('demoTag').style.display = 'inline';
+
+function boot(attempt) {
+  refresh().then(function() {
+    setTimeout(function() { document.getElementById('bootScreen').classList.add('hidden'); }, 600);
+    setTimeout(poll, POLL_MS);
+  }).catch(function() {
+    document.getElementById('bootStatus').innerText = 'Setup-Station nicht erreichbar – neuer Versuch (' + attempt + ') ...';
+    setTimeout(function() { boot(attempt + 1); }, 2000);
+  });
+}
+
+setTimeout(function() { boot(1); }, DEMO ? 1200 : 0);
+</script>
+</body>
+</html>
