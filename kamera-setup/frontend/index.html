@@ -247,6 +247,41 @@
       .header-title .subtitle { display: none; }
       .btn-row { grid-template-columns: 1fr; }
     }
+
+    /* ---------- Demo-Steuerung ---------- */
+    body.demo { padding-bottom: 80px; }
+    .boot-demo-btn { width: auto; margin-top: 25px; padding: 14px 28px; font-size: 16px; }
+    .demo-panel { position: fixed; right: 15px; bottom: 15px; z-index: 900; display: flex; flex-direction: column; align-items: flex-end; }
+    .demo-toggle {
+      order: 2; margin-top: 10px;
+      background-color: #002d56; color: white; border: none; border-radius: 30px;
+      padding: 12px 20px; font-size: 15px; font-weight: bold; font-family: inherit; cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0, 45, 86, 0.3);
+    }
+    .demo-body {
+      display: none; width: 320px; max-height: 75vh; overflow-y: auto;
+      background: white; border-radius: 14px; border-top: 5px solid #002d56;
+      box-shadow: 0 10px 40px rgba(0, 45, 86, 0.25); padding: 16px; box-sizing: border-box;
+    }
+    .demo-panel.open .demo-body { display: block; animation: fadeIn 0.2s ease-out; }
+    .demo-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: #002d56; }
+    .demo-state { font-size: 12px; font-weight: 600; color: #c26100; background-color: #fffaf0; padding: 3px 8px; border-radius: 4px; }
+    .demo-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .demo-actions .btn { font-size: 13px; padding: 10px 6px; }
+    .demo-field { margin-bottom: 12px; }
+    .demo-field label { display: block; margin-bottom: 5px; font-weight: 600; color: #ff6600; font-size: 13px; }
+    .demo-field select {
+      width: 100%; padding: 9px; border: 2px solid #f3e9e2; border-radius: 8px;
+      font-size: 14px; font-family: inherit; color: #333; background-color: #fdfdfd;
+    }
+    .demo-field select:focus { border-color: #ff6600; outline: none; }
+    .demo-field input[type="range"] { width: 100%; accent-color: #ff6600; }
+    .demo-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: #4a5568; margin-bottom: 12px; cursor: pointer; }
+    .demo-check input { accent-color: #ff6600; margin-top: 2px; }
+    @media (max-width: 520px) {
+      .demo-panel { left: 10px; right: 10px; bottom: 10px; }
+      .demo-body { width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -261,6 +296,7 @@
   <div class="spinner"></div>
   <h3 id="bootTitle">Kamera-Setup wird gestartet...</h3>
   <p id="bootStatus">Verbindung zur Setup-Station wird hergestellt.</p>
+  <button id="bootDemo" class="btn btn-primary boot-demo-btn" style="display:none;" onclick="startDemo()">🧪 Demo starten</button>
 </div>
 
 <!-- Bestätigung für Abbrechen -->
@@ -354,6 +390,58 @@
   </div>
 </div>
 
+<!-- Demo-Steuerung (nur im Demo-Modus sichtbar) -->
+<div id="demoPanel" class="demo-panel" style="display:none;">
+  <button id="demoToggle" class="demo-toggle">🧪 Demo</button>
+  <div class="demo-body">
+    <div class="demo-head">
+      <strong>Demo-Steuerung</strong>
+      <span id="demoState" class="demo-state"></span>
+    </div>
+
+    <div class="demo-actions">
+      <button id="demoPlug" class="btn btn-primary">🔌 Kamera anstecken</button>
+      <button id="demoUnplug" class="btn btn-secondary">Kamera abziehen</button>
+    </div>
+
+    <label class="demo-check"><input type="checkbox" id="demoAuto"> Kamera automatisch erkennen (nach ein paar Sekunden)</label>
+
+    <div class="demo-field">
+      <label for="demoScenario">Szenario</label>
+      <select id="demoScenario">
+        <option value="ok">Alles klappt</option>
+        <option value="step">Fehler bei bestimmtem Schritt</option>
+        <option value="random">Zufällige Fehler</option>
+      </select>
+    </div>
+    <div class="demo-field" id="demoFailStepRow">
+      <label for="demoFailStep">Fehler bei</label>
+      <select id="demoFailStep"></select>
+    </div>
+    <label class="demo-check" id="demoPersistentRow"><input type="checkbox" id="demoPersistent"> Fehler bleibt auch beim Wiederholen</label>
+    <div class="demo-field" id="demoRandomRow">
+      <label for="demoRandomPct">Fehlerwahrscheinlichkeit pro Schritt: <span id="demoRandomPctLabel"></span></label>
+      <input type="range" id="demoRandomPct" min="5" max="50" step="5">
+    </div>
+
+    <label class="demo-check"><input type="checkbox" id="demoFirmware"> Firmware ist schon aktuell (Update wird übersprungen)</label>
+
+    <div class="demo-field">
+      <label for="demoSpeed">Geschwindigkeit</label>
+      <select id="demoSpeed">
+        <option value="fast">Schnell</option>
+        <option value="normal">Normal</option>
+        <option value="real">Realistisch (langsam)</option>
+      </select>
+    </div>
+
+    <div class="demo-actions">
+      <button id="demoResetStats" class="btn btn-secondary">Zähler zurücksetzen</button>
+      <button id="demoExit" class="btn btn-secondary">Demo beenden</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /*
  * Frontend der Kamera-Setup-Station.
@@ -362,13 +450,14 @@
  * Aktionen: POST /api/start, /api/cancel, /api/retry, /api/next.
  * Das Format ist in kamera-setup/README.md beschrieben.
  *
- * Demo-Modus (ohne Backend): Seite als Datei öffnen oder ?demo anhängen.
- * ?demo=error simuliert einen Fehler beim Backup.
+ * Demo-Modus (ohne Backend): Seite als Datei öffnen, ?demo anhängen oder
+ * auf dem Ladebildschirm "Demo starten" tippen. Über das Panel "Demo" unten
+ * rechts lassen sich Kamera, Fehler und Geschwindigkeit steuern.
  */
 
 var params = new URLSearchParams(location.search);
 var DEMO = location.protocol === 'file:' || params.has('demo');
-var POLL_MS = 1000;
+var POLL_MS = DEMO ? 300 : 1000;
 
 var STATE_SCREENS = {
   waiting: 'screenWaiting',
@@ -522,27 +611,58 @@ function hideConfirm() { document.getElementById('confirmDimmer').classList.remo
 function confirmCancel() { hideConfirm(); cancelPending = true; api.cancel(); }
 
 // ==========================================
-// 3. DEMO-MODUS (simuliert das Backend)
+// 3. DEMO-MODUS (simuliert Backend und Kamera)
 // ==========================================
 
 var demo = (function() {
   var STEPS = [
-    ['detect',   'Kamera suchen (192.168.0.21)', 1500],
-    ['login',    'MAC auslesen & anmelden',      1500],
-    ['password', 'Passwort ändern',              1500],
-    ['name',     'Name „CAM 1“ setzen',          1200],
-    ['backup',   'Backup einspielen',            2500],
-    ['newip',    'Neue IP prüfen (192.168.8.21)', 4000],
-    ['firmware', 'Firmware-Update',              8000],
-    ['verify',   'Abschlussprüfung',             1500]
+    // key, Bezeichnung, Dauer (ms), Meldung bei Erfolg, Meldung bei Fehler
+    ['detect',   'Kamera suchen (192.168.0.21)',  1500, 'Kamera antwortet',
+                 'Keine Kamera auf 192.168.0.21 gefunden (Timeout nach 60 s)'],
+    ['login',    'MAC auslesen & anmelden',       1500, null,
+                 'Anmeldung fehlgeschlagen (HTTP 401) – Kamera evtl. nicht im Werkszustand'],
+    ['password', 'Passwort ändern',               1500, 'Login mit neuem Passwort geprüft',
+                 'set_password: Kamera meldet success = false'],
+    ['name',     'Name „CAM 1“ setzen',           1200, 'Name zurückgelesen: CAM 1',
+                 'Name zurückgelesen: „Camera“ statt „CAM 1“'],
+    ['backup',   'Backup einspielen',             2500, 'ANPR, Base und Netzwerk übertragen',
+                 'all_settings: HTTP 400 – ungültige Einstellungen'],
+    ['newip',    'Neue IP prüfen (192.168.8.21)', 4000, '192.168.8.21 antwortet, Einstellungen stimmen',
+                 '192.168.8.21 antwortet nicht (Timeout nach 120 s)'],
+    ['firmware', 'Firmware-Update',               8000, null,
+                 'Update fehlgeschlagen (update_progress: error = true)'],
+    ['verify',   'Abschlussprüfung',              1500, 'Version, Name und IP geprüft',
+                 'Firmware-Version stimmt nicht mit der Zieldatei überein']
   ];
-  var DETAILS = {
-    detect: 'Kamera antwortet', login: 'Passwort aus MAC …A1B2 abgeleitet', password: 'Login mit neuem Passwort geprüft',
-    name: 'Name zurückgelesen: CAM 1', backup: 'ANPR, Base und Netzwerk übertragen', newip: '192.168.8.21 antwortet, Einstellungen stimmen',
-    firmware: 'Version 4.12.0 installiert', verify: 'Alle Werte geprüft'
-  };
-  var failAt = params.get('demo') === 'error' ? 'backup' : null;
+  var LATEST = '4.12.0';
+  var OLD_VERSIONS = ['4.9.7', '4.10.2', '4.11.0'];
+  var SPEEDS = { fast: 0.35, normal: 1, real: 6 };
+
+  var opts = loadOpts();
   var s, timer, stepStart;
+
+  function loadOpts() {
+    var d = { speed: 'normal', scenario: 'ok', failStep: 'backup', randomPct: 15,
+              persistent: false, firmwareCurrent: false, autoDetect: true };
+    try { Object.assign(d, JSON.parse(localStorage.getItem('demoOpts') || '{}')); } catch (e) {}
+    if (params.get('demo') === 'error') { d.scenario = 'step'; d.failStep = 'backup'; }
+    return d;
+  }
+  function saveOpts() { try { localStorage.setItem('demoOpts', JSON.stringify(opts)); } catch (e) {} }
+
+  function hex(n) {
+    var out = '';
+    for (var i = 0; i < n; i++) out += '0123456789ABCDEF'[Math.floor(Math.random() * 16)];
+    return out;
+  }
+  function newCamera() {
+    var mac = ['00', '1A', '2B', hex(2), hex(2), hex(2)].join(':');
+    return {
+      mac: mac,
+      serial: 'RB-' + (23 + Math.floor(Math.random() * 3)) + '-' + String(Math.floor(Math.random() * 99999)).padStart(5, '0'),
+      version_before: opts.firmwareCurrent ? LATEST : OLD_VERSIONS[Math.floor(Math.random() * OLD_VERSIONS.length)]
+    };
+  }
 
   function reset() {
     clearTimeout(timer);
@@ -554,68 +674,160 @@ var demo = (function() {
       stats: s ? s.stats : { ok: 0, error: 0 },
       config: { default_ip: '192.168.0.21' }
     };
-    timer = setTimeout(start, 4000); // simuliert: Kamera wird angesteckt
+    if (opts.autoDetect) timer = setTimeout(plugIn, 4000 * SPEEDS[opts.speed]);
+    updatePanel();
   }
 
-  function start() {
+  function plugIn() {
     if (s.state !== 'waiting') return;
     clearTimeout(timer);
     s.state = 'running';
-    s.camera = { mac: '00:1A:2B:3C:A1:B2' };
+    s.camera = { mac: null };
+    s.pending = newCamera();
     runFrom(0);
+    updatePanel();
+  }
+
+  function unplug() {
+    if (s.state !== 'running') return;
+    fail(currentIndex(), 'Verbindung zur Kamera verloren – Kabel/PoE prüfen');
+  }
+
+  function currentIndex() {
+    return s.steps.findIndex(function(st) { return st.status === 'running'; });
+  }
+
+  function shouldFail(key) {
+    if (opts.scenario === 'step') return key === opts.failStep && (s.failedOnce !== key || opts.persistent);
+    if (opts.scenario === 'random') return key !== s.retryStep && Math.random() * 100 < opts.randomPct;
+    return false;
+  }
+
+  function fail(i, message) {
+    clearTimeout(timer);
+    var st = s.steps[i];
+    st.status = 'error';
+    st.detail = message;
+    st.progress = null;
+    s.error = { step: st.key, message: message };
+    s.state = 'error';
+    s.stats.error++;
+    s.failedOnce = st.key;
+    updatePanel();
   }
 
   function runFrom(i) {
-    if (i >= s.steps.length) { s.state = 'done'; s.stats.ok++; return; }
+    if (i >= s.steps.length) { s.state = 'done'; s.stats.ok++; updatePanel(); return; }
     var st = s.steps[i];
     st.status = 'running';
-    st.detail = st.key === 'firmware' ? 'Datei wird hochgeladen ...' : (st.key === 'newip' ? 'Kamera startet neu, warte auf 192.168.8.21 ...' : '');
-    st.progress = st.key === 'firmware' ? 0 : null;
+    st.progress = null;
+    st.detail = {
+      detect: 'Ping auf 192.168.0.21 ...', login: 'ARP-Tabelle wird gelesen ...', password: 'Neues Passwort wird gesetzt ...',
+      name: 'POST /api/v2/system/settings/ ...', backup: 'Einstellungen werden übertragen ...',
+      newip: 'Kamera startet neu, warte auf 192.168.8.21 ...', firmware: 'Version wird geprüft ...', verify: 'Werte werden zurückgelesen ...'
+    }[st.key];
     stepStart = Date.now();
     tick(i);
   }
 
   function tick(i) {
     var st = s.steps[i];
-    var dur = STEPS[i][2];
+    var dur = STEPS[i][2] * SPEEDS[opts.speed];
     var elapsed = Date.now() - stepStart;
-    if (st.key === 'firmware') {
-      st.progress = Math.min(100, Math.round(elapsed / dur * 100));
-      st.detail = st.progress < 40 ? 'Datei wird hochgeladen ... ' + st.progress + ' %' : 'Wird installiert ... ' + st.progress + ' %';
-    }
-    if (elapsed < dur) { timer = setTimeout(function() { tick(i); }, 200); return; }
 
-    if (st.key === failAt) {
-      st.status = 'error';
-      st.detail = 'Kamera hat das Backup abgelehnt (HTTP 400)';
-      s.error = { step: st.key, message: 'POST /system/actions/all_settings: HTTP 400 – ungültige Einstellungen' };
-      s.state = 'error';
-      s.stats.error++;
-      failAt = null; // beim Wiederholen klappt es
+    if (st.key === 'firmware' && s.camera.version_before !== LATEST) {
+      st.progress = Math.min(100, Math.round(elapsed / dur * 100));
+      st.detail = st.progress < 40 ? 'Datei wird hochgeladen ... ' + st.progress + ' %'
+        : st.progress < 95 ? 'Wird installiert ... ' + st.progress + ' %'
+        : 'Kamera startet neu ...';
+    }
+    if (st.key === 'backup' && elapsed > dur / 3) st.detail = elapsed > dur * 2 / 3 ? 'Netzwerk ...' : 'Base-Einstellungen ...';
+
+    if (elapsed < dur) { timer = setTimeout(function() { tick(i); }, 150); return; }
+
+    if (shouldFail(st.key)) {
+      fail(i, STEPS[i][4]);
       return;
     }
+
     st.status = 'done';
     st.progress = null;
-    st.detail = DETAILS[st.key];
-    if (st.key === 'login') { s.camera.serial = 'RB-24-00817'; s.camera.version_before = '4.10.2'; }
-    if (st.key === 'name') s.camera.name = 'CAM 1';
-    if (st.key === 'newip') s.camera.ip = '192.168.8.21';
-    if (st.key === 'firmware') s.camera.version_after = '4.12.0';
+    st.detail = STEPS[i][3];
+    var c = s.camera;
+    if (st.key === 'login') {
+      c.mac = s.pending.mac; c.serial = s.pending.serial; c.version_before = s.pending.version_before;
+      st.detail = 'Passwort aus MAC …' + c.mac.slice(-5).replace(':', '') + ' abgeleitet';
+    }
+    if (st.key === 'name') c.name = 'CAM 1';
+    if (st.key === 'newip') c.ip = '192.168.8.21';
+    if (st.key === 'firmware') {
+      if (c.version_before === LATEST) { st.status = 'skipped'; st.detail = 'Version ' + LATEST + ' ist bereits aktuell'; }
+      else st.detail = 'Version ' + LATEST + ' installiert';
+      c.version_after = LATEST;
+    }
     runFrom(i + 1);
   }
 
-  reset();
+  // ---------- Steuerpanel ----------
+
+  function updatePanel() {
+    var el = document.getElementById('demoPanel');
+    if (!el || !s) return;
+    document.getElementById('demoPlug').disabled = s.state !== 'waiting';
+    document.getElementById('demoUnplug').disabled = s.state !== 'running';
+    document.getElementById('demoState').innerText =
+      { waiting: 'Wartet auf Kamera', running: 'Einrichtung läuft', done: 'Fertig', error: 'Fehler' }[s.state];
+  }
+
+  function initPanel() {
+    var sel = document.getElementById('demoFailStep');
+    sel.innerHTML = STEPS.map(function(d) { return '<option value="' + d[0] + '">' + escapeHtml(d[1]) + '</option>'; }).join('');
+
+    var bind = function(id, key, prop, parse) {
+      var input = document.getElementById(id);
+      input[prop] = opts[key];
+      input.addEventListener('change', function() {
+        opts[key] = parse ? parse(input[prop]) : input[prop];
+        saveOpts();
+        syncPanel();
+      });
+    };
+    bind('demoSpeed', 'speed', 'value');
+    bind('demoScenario', 'scenario', 'value');
+    bind('demoFailStep', 'failStep', 'value');
+    bind('demoRandomPct', 'randomPct', 'value', Number);
+    bind('demoPersistent', 'persistent', 'checked');
+    bind('demoFirmware', 'firmwareCurrent', 'checked');
+    bind('demoAuto', 'autoDetect', 'checked');
+
+    document.getElementById('demoPlug').onclick = function() { plugIn(); refresh(); };
+    document.getElementById('demoUnplug').onclick = function() { unplug(); refresh(); };
+    document.getElementById('demoResetStats').onclick = function() { s.stats = { ok: 0, error: 0 }; refresh(); };
+    document.getElementById('demoToggle').onclick = function() {
+      opts.panelOpen = document.getElementById('demoPanel').classList.toggle('open');
+      saveOpts();
+    };
+    document.getElementById('demoPanel').classList.toggle('open', !!opts.panelOpen);
+    document.getElementById('demoExit').onclick = function() { location.href = location.pathname; };
+    document.getElementById('demoPanel').style.display = '';
+    syncPanel();
+    updatePanel();
+  }
+
+  function syncPanel() {
+    document.getElementById('demoFailStepRow').style.display = opts.scenario === 'step' ? '' : 'none';
+    document.getElementById('demoRandomRow').style.display = opts.scenario === 'random' ? '' : 'none';
+    document.getElementById('demoPersistentRow').style.display = opts.scenario === 'step' ? '' : 'none';
+    document.getElementById('demoRandomPctLabel').innerText = opts.randomPct + ' %';
+  }
 
   return {
+    init: function() { reset(); initPanel(); },
     status: function() { return Promise.resolve(JSON.parse(JSON.stringify(s))); },
-    start: start,
+    start: plugIn,
     cancel: function() {
-      clearTimeout(timer);
-      var cur = s.steps.filter(function(st) { return st.status === 'running'; })[0];
-      if (cur) { cur.status = 'error'; cur.detail = 'Vom Benutzer abgebrochen'; }
-      s.error = { message: 'Vom Benutzer abgebrochen' };
-      s.state = 'error';
-      s.stats.error++;
+      var i = currentIndex();
+      if (i >= 0) fail(i, 'Vom Benutzer abgebrochen');
     },
     retry: function() {
       var i = s.steps.findIndex(function(st) { return st.status === 'error'; });
@@ -623,7 +835,9 @@ var demo = (function() {
       s.state = 'running';
       s.error = null;
       s.stats.error--;
+      s.retryStep = s.steps[i].key;
       runFrom(i);
+      updatePanel();
     },
     next: reset
   };
@@ -633,18 +847,27 @@ var demo = (function() {
 // 4. START
 // ==========================================
 
-if (DEMO) document.getElementById('demoTag').style.display = 'inline';
+function startDemo() {
+  DEMO = true;
+  POLL_MS = 300;
+  document.getElementById('demoTag').style.display = 'inline';
+  document.body.classList.add('demo');
+  demo.init();
+}
 
 function boot(attempt) {
   refresh().then(function() {
     setTimeout(function() { document.getElementById('bootScreen').classList.add('hidden'); }, 600);
     setTimeout(poll, POLL_MS);
   }).catch(function() {
+    if (DEMO) return boot(attempt);
     document.getElementById('bootStatus').innerText = 'Setup-Station nicht erreichbar – neuer Versuch (' + attempt + ') ...';
+    document.getElementById('bootDemo').style.display = attempt >= 2 ? '' : 'none';
     setTimeout(function() { boot(attempt + 1); }, 2000);
   });
 }
 
+if (DEMO) startDemo();
 setTimeout(function() { boot(1); }, DEMO ? 1200 : 0);
 </script>
 </body>

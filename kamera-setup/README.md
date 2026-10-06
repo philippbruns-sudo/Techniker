@@ -26,9 +26,29 @@ Name und Passwort sind nicht im Backup enthalten und werden davon nicht übersch
 
 `frontend/index.html` – eine Datei, kein Build nötig.
 
-- **Demo-Modus:** Datei direkt im Browser öffnen oder `?demo` anhängen.
-  `?demo=error` simuliert einen Fehler beim Backup.
-- Ansonsten fragt die Seite jede Sekunde das Backend ab.
+- Im Normalbetrieb fragt die Seite jede Sekunde das Backend ab.
+
+### Demo-Modus
+
+Simuliert Backend und Kamera komplett im Browser, zum Ausprobieren und Vorführen.
+
+Starten: Datei direkt im Browser öffnen, `?demo` an die Adresse hängen oder auf dem
+Ladebildschirm „🧪 Demo starten“ tippen (erscheint, wenn die Setup-Station nicht erreichbar ist).
+
+Über den Knopf **🧪 Demo** unten rechts:
+
+| Einstellung | Wirkung |
+|---|---|
+| Kamera anstecken / abziehen | Kamera „einstecken“; Abziehen während der Einrichtung erzeugt einen Verbindungsfehler |
+| Automatisch erkennen | Kamera wird nach ein paar Sekunden von selbst „gefunden“ |
+| Szenario | Alles klappt · Fehler bei bestimmtem Schritt · Zufällige Fehler (5–50 % pro Schritt) |
+| Fehler bleibt beim Wiederholen | Wiederholen schlägt erneut fehl |
+| Firmware schon aktuell | Update-Schritt wird übersprungen |
+| Geschwindigkeit | Schnell · Normal · Realistisch |
+| Zähler zurücksetzen / Demo beenden | |
+
+Jede Kamera bekommt eine neue Zufalls-MAC und -Seriennummer. Die Einstellungen
+bleiben im Browser gespeichert. `?demo=error` startet direkt mit einem Fehler beim Backup.
 
 ### Schnittstelle Frontend ↔ Backend
 
