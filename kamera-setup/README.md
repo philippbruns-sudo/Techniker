@@ -22,6 +22,19 @@ Raspberry Pi + Tablet zum automatischen Einrichten von ARVOO-Ruby-Kameras.
 
 Name und Passwort sind nicht im Backup enthalten und werden davon nicht überschrieben.
 
+## Profile (welches Backup)
+
+Vor dem Start wird auf dem Startbildschirm gewählt, welche Kamera eingerichtet wird.
+Ein Profil verknüpft Backup-Datei, Ziel-IP und Kameraname:
+
+| Profil | Backup-Datei | Ziel-IP | Name |
+|---|---|---|---|
+| `cam1` | `backup_cam1.json` | 192.168.8.21 | CAM 1 |
+| `cam2` | `backup_cam2.json` | 192.168.8.22 | CAM 2 |
+
+Die Auswahl bleibt für die nächste Kamera erhalten und ist während der Einrichtung gesperrt.
+Schritt 4 (Name) und Schritt 6 (IP-Prüfung) richten sich nach dem gewählten Profil.
+
 ## Frontend
 
 `frontend/index.html` – eine Datei, kein Build nötig.
@@ -63,6 +76,7 @@ bleiben im Browser gespeichert. `?demo=error` startet direkt mit einem Fehler be
 | `POST` | `/api/cancel` | Laufende Einrichtung abbrechen |
 | `POST` | `/api/retry` | Ab dem fehlgeschlagenen Schritt wiederholen |
 | `POST` | `/api/next` | Zurück zu „Kamera anschließen“ (nächste Kamera) |
+| `POST` | `/api/profile` | Profil wählen, Body `{"id": "cam2"}` – nur im Zustand `waiting` |
 
 `GET /api/status`:
 
@@ -88,7 +102,14 @@ bleiben im Browser gespeichert. `?demo=error` startet direkt mit einem Fehler be
   ],
   "error": { "step": "backup", "message": "HTTP 400 ..." },
   "stats": { "ok": 12, "error": 1 },
-  "config": { "default_ip": "192.168.0.21" }
+  "config": {
+    "default_ip": "192.168.0.21",
+    "profile": "cam1",
+    "profiles": [
+      { "id": "cam1", "name": "CAM 1", "ip": "192.168.8.21" },
+      { "id": "cam2", "name": "CAM 2", "ip": "192.168.8.22" }
+    ]
+  }
 }
 ```
 

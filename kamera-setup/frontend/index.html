@@ -67,7 +67,7 @@
 
     .screen { display: none; }
     .screen.active {
-      display: flex; flex-direction: column; justify-content: center;
+      display: flex; flex-direction: column; justify-content: safe center;
       flex: 1; min-height: 0;
       animation: fadeIn 0.25s ease-out;
     }
@@ -107,12 +107,12 @@
     /* ---------- Warten auf Kamera ---------- */
     .waiting { text-align: center; padding: 10px 0; }
     .cam-pulse {
-      width: clamp(110px, 11vw, 190px); height: clamp(110px, 11vw, 190px); margin: 0 auto 28px auto;
+      width: clamp(90px, min(11vw, 16vh), 190px); height: clamp(90px, min(11vw, 16vh), 190px); margin: 0 auto clamp(16px, 3vh, 28px) auto;
       border-radius: 50%;
       background-color: #fdfaf7;
       border: 3px solid #ff6600;
       display: flex; align-items: center; justify-content: center;
-      font-size: clamp(50px, 5vw, 86px);
+      font-size: clamp(42px, min(5vw, 7.5vh), 86px);
       animation: pulse 2s ease-in-out infinite;
     }
     @keyframes pulse {
@@ -127,6 +127,28 @@
       margin-top: 20px; padding: 10px 16px;
       background-color: #fdfaf7; border-left: 4px solid #ff6600; border-radius: 6px;
       font-size: 14px; color: #c26100; font-weight: 600;
+    }
+
+    /* ---------- Profilauswahl (welches Backup) ---------- */
+    .profile-select { margin-top: clamp(16px, 2.5vh, 28px); }
+    .profile-select > label { display: block; text-align: center; margin-bottom: 8px; font-weight: 600; color: #ff6600; font-size: clamp(14px, 1.05vw, 18px); }
+    .profile-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .profile-opt {
+      position: relative;
+      background-color: #fdfdfd; border: 2px solid #f3e9e2; border-radius: 10px;
+      padding: clamp(10px, 1.4vh, 16px) 12px; cursor: pointer; font-family: inherit; text-align: center;
+      transition: all 0.2s;
+    }
+    .profile-opt strong { display: block; font-size: clamp(18px, 1.6vw, 28px); color: #94a3b8; }
+    .profile-opt span { display: block; margin-top: 2px; font-size: clamp(13px, 1vw, 17px); color: #94a3b8; font-family: Consolas, 'Courier New', monospace; font-weight: 600; }
+    .profile-opt.active { border-color: #ff6600; background-color: #fffaf0; box-shadow: 0 4px 10px rgba(255, 102, 0, 0.15); }
+    .profile-opt.active strong { color: #002d56; }
+    .profile-opt.active span { color: #c26100; }
+    .profile-opt.active::after {
+      content: '✓'; position: absolute; top: 6px; right: 8px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background-color: #ff6600; color: white; font-size: 13px; font-weight: bold;
+      display: flex; align-items: center; justify-content: center;
     }
 
     /* ---------- Info-Karte (Kameradaten) ---------- */
@@ -291,6 +313,16 @@
     .dialog h3 { margin: 0 0 10px 0; color: #002d56; }
     .dialog p { margin: 0 0 20px 0; color: #4a5568; font-size: 15px; line-height: 1.5; }
 
+    /* Niedrige Bildschirme (z. B. 1024x600): Startseite kompakter */
+    @media (max-height: 760px) {
+      .waiting p { display: none; }
+      .waiting h2 { margin-bottom: 0; }
+      .search-hint { margin-top: 12px; }
+      .cam-pulse { width: 80px; height: 80px; font-size: 38px; margin-bottom: 14px; }
+      .waiting + .profile-select, .profile-select { margin-top: 14px; }
+      .screen .mt { margin-top: 14px; }
+    }
+
     @media (max-width: 900px), (max-height: 520px) {
       html, body { height: auto; }
       body { overflow: auto; padding: 15px; }
@@ -397,6 +429,10 @@
             <div class="spinner light small"></div>
             <span>Suche Kamera auf <span id="defaultIp">192.168.0.21</span> ...</span>
           </div>
+        </div>
+        <div class="profile-select" id="profileSelect" style="display:none;">
+          <label>Welche Kamera wird eingerichtet?</label>
+          <div class="profile-options" id="profileOptions"></div>
         </div>
         <button class="btn btn-primary mt" onclick="api.start()">▶ Einrichtung manuell starten</button>
       </div>
@@ -551,18 +587,21 @@ var api = {
   start:  function() { return action('start'); },
   cancel: function() { return action('cancel'); },
   retry:  function() { return action('retry'); },
-  next:   function() { return action('next'); }
+  next:   function() { return action('next'); },
+  profile: function(id) { return action('profile', { id: id }); }
 };
 
-function request(method, url) {
-  return fetch(url, { method: method, cache: 'no-store' }).then(function(res) {
+function request(method, url, body) {
+  var init = { method: method, cache: 'no-store' };
+  if (body) { init.headers = { 'Content-Type': 'application/json' }; init.body = JSON.stringify(body); }
+  return fetch(url, init).then(function(res) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return res.json();
   });
 }
 
-function action(name) {
-  var p = DEMO ? Promise.resolve(demo[name]()) : request('POST', '/api/' + name);
+function action(name, body) {
+  var p = DEMO ? Promise.resolve(demo[name](body)) : request('POST', '/api/' + name, body);
   return p.then(refresh).catch(function(e) { setOnline(false, e.message); });
 }
 
@@ -604,6 +643,7 @@ function render(s) {
   document.getElementById('statOk').innerText = s.stats ? s.stats.ok : 0;
   document.getElementById('statErr').innerText = s.stats ? s.stats.error : 0;
   if (s.config && s.config.default_ip) document.getElementById('defaultIp').innerText = s.config.default_ip;
+  renderProfiles(s.config);
 
   var steps = s.steps || [];
   var info = cameraInfoHtml(s.camera);
@@ -642,6 +682,22 @@ function render(s) {
   }
   if (s.state !== 'running') cancelPending = false;
 }
+
+function renderProfiles(config) {
+  var profiles = (config && config.profiles) || [];
+  document.getElementById('profileSelect').style.display = profiles.length > 1 ? '' : 'none';
+  var html = profiles.map(function(p) {
+    return '<button class="profile-opt' + (p.id === config.profile ? ' active' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
+      '<strong>' + escapeHtml(p.name) + '</strong><span>' + escapeHtml(p.ip) + '</span></button>';
+  }).join('');
+  var el = document.getElementById('profileOptions');
+  if (el.innerHTML !== html) el.innerHTML = html;
+}
+
+document.getElementById('profileOptions').addEventListener('click', function(e) {
+  var btn = e.target.closest('.profile-opt');
+  if (btn) api.profile(btn.getAttribute('data-id'));
+});
 
 function cameraInfoHtml(c) {
   if (!c) return '';
@@ -709,16 +765,21 @@ var demo = (function() {
                  'Anmeldung fehlgeschlagen (HTTP 401) – Kamera evtl. nicht im Werkszustand'],
     ['password', 'Passwort ändern',               1500, 'Login mit neuem Passwort geprüft',
                  'set_password: Kamera meldet success = false'],
-    ['name',     'Name „CAM 1“ setzen',           1200, 'Name zurückgelesen: CAM 1',
-                 'Name zurückgelesen: „Camera“ statt „CAM 1“'],
+    ['name',     'Name „{name}“ setzen',          1200, 'Name zurückgelesen: {name}',
+                 'Name zurückgelesen: „Camera“ statt „{name}“'],
     ['backup',   'Backup einspielen',             2500, 'ANPR, Base und Netzwerk übertragen',
                  'all_settings: HTTP 400 – ungültige Einstellungen'],
-    ['newip',    'Neue IP prüfen (192.168.8.21)', 4000, '192.168.8.21 antwortet, Einstellungen stimmen',
-                 '192.168.8.21 antwortet nicht (Timeout nach 120 s)'],
+    ['newip',    'Neue IP prüfen ({ip})',         4000, '{ip} antwortet, Einstellungen stimmen',
+                 '{ip} antwortet nicht (Timeout nach 120 s)'],
     ['firmware', 'Firmware-Update',               8000, null,
                  'Update fehlgeschlagen (update_progress: error = true)'],
     ['verify',   'Abschlussprüfung',              1500, 'Version, Name und IP geprüft',
                  'Firmware-Version stimmt nicht mit der Zieldatei überein']
+  ];
+  // Ein Profil = eine Backup-Datei mit Ziel-IP und Kameraname
+  var PROFILES = [
+    { id: 'cam1', name: 'CAM 1', ip: '192.168.8.21', backup: 'backup_cam1.json' },
+    { id: 'cam2', name: 'CAM 2', ip: '192.168.8.22', backup: 'backup_cam2.json' }
   ];
   var LATEST = '4.12.0';
   var OLD_VERSIONS = ['4.9.7', '4.10.2', '4.11.0'];
@@ -729,12 +790,20 @@ var demo = (function() {
 
   function loadOpts() {
     var d = { speed: 'normal', scenario: 'ok', failStep: 'backup', randomPct: 15,
-              persistent: false, firmwareCurrent: false, autoDetect: true };
+              persistent: false, firmwareCurrent: false, autoDetect: true, profile: 'cam1' };
     try { Object.assign(d, JSON.parse(localStorage.getItem('demoOpts') || '{}')); } catch (e) {}
     if (params.get('demo') === 'error') { d.scenario = 'step'; d.failStep = 'backup'; }
     return d;
   }
   function saveOpts() { try { localStorage.setItem('demoOpts', JSON.stringify(opts)); } catch (e) {} }
+
+  function profile() {
+    return PROFILES.filter(function(p) { return p.id === opts.profile; })[0] || PROFILES[0];
+  }
+  function fmt(t) {
+    var p = profile();
+    return t && t.replace(/\{ip\}/g, p.ip).replace(/\{name\}/g, p.name);
+  }
 
   function hex(n) {
     var out = '';
@@ -755,10 +824,10 @@ var demo = (function() {
     s = {
       state: 'waiting',
       camera: null,
-      steps: STEPS.map(function(d) { return { key: d[0], label: d[1], status: 'pending', detail: '', progress: null }; }),
+      steps: STEPS.map(function(d) { return { key: d[0], label: fmt(d[1]), status: 'pending', detail: '', progress: null }; }),
       error: null,
       stats: s ? s.stats : { ok: 0, error: 0 },
-      config: { default_ip: '192.168.0.21' }
+      config: { default_ip: '192.168.0.21', profiles: PROFILES, profile: profile().id }
     };
     if (opts.autoDetect) timer = setTimeout(plugIn, 4000 * SPEEDS[opts.speed]);
     updatePanel();
@@ -810,7 +879,7 @@ var demo = (function() {
     st.detail = {
       detect: 'Ping auf 192.168.0.21 ...', login: 'ARP-Tabelle wird gelesen ...', password: 'Neues Passwort wird gesetzt ...',
       name: 'POST /api/v2/system/settings/ ...', backup: 'Einstellungen werden übertragen ...',
-      newip: 'Kamera startet neu, warte auf 192.168.8.21 ...', firmware: 'Version wird geprüft ...', verify: 'Werte werden zurückgelesen ...'
+      newip: fmt('Kamera startet neu, warte auf {ip} ...'), firmware: 'Version wird geprüft ...', verify: 'Werte werden zurückgelesen ...'
     }[st.key];
     stepStart = Date.now();
     tick(i);
@@ -832,20 +901,20 @@ var demo = (function() {
     if (elapsed < dur) { timer = setTimeout(function() { tick(i); }, 150); return; }
 
     if (shouldFail(st.key)) {
-      fail(i, STEPS[i][4]);
+      fail(i, fmt(STEPS[i][4]));
       return;
     }
 
     st.status = 'done';
     st.progress = null;
-    st.detail = STEPS[i][3];
+    st.detail = fmt(STEPS[i][3]);
     var c = s.camera;
     if (st.key === 'login') {
       c.mac = s.pending.mac; c.serial = s.pending.serial; c.version_before = s.pending.version_before;
       st.detail = 'Passwort aus MAC …' + c.mac.slice(-5).replace(':', '') + ' abgeleitet';
     }
-    if (st.key === 'name') c.name = 'CAM 1';
-    if (st.key === 'newip') c.ip = '192.168.8.21';
+    if (st.key === 'name') c.name = profile().name;
+    if (st.key === 'newip') c.ip = profile().ip;
     if (st.key === 'firmware') {
       if (c.version_before === LATEST) { st.status = 'skipped'; st.detail = 'Version ' + LATEST + ' ist bereits aktuell'; }
       else st.detail = 'Version ' + LATEST + ' installiert';
@@ -867,7 +936,7 @@ var demo = (function() {
 
   function initPanel() {
     var sel = document.getElementById('demoFailStep');
-    sel.innerHTML = STEPS.map(function(d) { return '<option value="' + d[0] + '">' + escapeHtml(d[1]) + '</option>'; }).join('');
+    sel.innerHTML = STEPS.map(function(d) { return '<option value="' + d[0] + '">' + escapeHtml(fmt(d[1])) + '</option>'; }).join('');
 
     var bind = function(id, key, prop, parse) {
       var input = document.getElementById(id);
@@ -925,7 +994,14 @@ var demo = (function() {
       runFrom(i);
       updatePanel();
     },
-    next: reset
+    next: reset,
+    profile: function(body) {
+      if (s.state !== 'waiting' || !body) return;
+      opts.profile = body.id;
+      saveOpts();
+      s.config.profile = profile().id;
+      s.steps.forEach(function(st, i) { st.label = fmt(STEPS[i][1]); });
+    }
   };
 })();
 
