@@ -45,6 +45,22 @@ Schritt 4 (Name) und Schritt 6 (IP-Prüfung) richten sich nach dem gewählten Pr
 
 - Im Normalbetrieb fragt die Seite jede Sekunde das Backend ab.
 
+### Töne
+
+Damit man nicht ständig auf den Bildschirm schauen muss:
+
+| Ereignis | Ton |
+|---|---|
+| Kamera erkannt, Einrichtung startet | kurzer Doppel-Piep |
+| Einrichtung erfolgreich | aufsteigender Dreiklang |
+| Fehler | tiefer Warnton, **wiederholt alle 30 s**, bis jemand den Bildschirm berührt |
+
+Die Töne werden im Browser erzeugt (Web Audio), es gibt keine Sounddateien.
+Der Schalter oben rechts schaltet den Ton an/aus (wird gespeichert).
+Browser geben Ton erst nach der ersten Berührung frei – bis dahin blinkt der Schalter
+orange („Antippen für Ton“). Im Fully Kiosk Browser lässt sich das über die Einstellung
+für automatische Medienwiedergabe umgehen.
+
 ### Demo-Modus
 
 Simuliert Backend und Kamera komplett im Browser, zum Ausprobieren und Vorführen.
@@ -62,6 +78,7 @@ Ladebildschirm „🧪 Demo starten“ tippen (erscheint, wenn die Setup-Station
 | Fehler bleibt beim Wiederholen | Wiederholen schlägt erneut fehl |
 | Firmware schon aktuell | Update-Schritt wird übersprungen |
 | Geschwindigkeit | Schnell · Normal · Realistisch |
+| Töne testen | Erkannt · Erfolg · Fehler einzeln abspielen |
 | Zähler zurücksetzen / Demo beenden | |
 
 Jede Kamera bekommt eine neue Zufalls-MAC und -Seriennummer. Die Einstellungen

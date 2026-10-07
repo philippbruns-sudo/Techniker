@@ -341,6 +341,20 @@
       .btn-row { grid-template-columns: 1fr; }
     }
 
+    /* ---------- Ton-Schalter ---------- */
+    .header-right { display: flex; align-items: center; gap: 18px; }
+    .sound-toggle {
+      display: flex; align-items: center; gap: 8px;
+      background-color: white; color: #002d56;
+      border: 2px solid #cbd5e1; border-radius: 30px;
+      padding: 8px 16px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sound-toggle .ico { font-size: 18px; }
+    .sound-toggle.on { border-color: #4caf50; color: #155724; background-color: #f0fff4; }
+    .sound-toggle.locked { border-color: #ff6600; color: #c26100; background-color: #fffaf0; animation: pulse 2s ease-in-out infinite; }
+    @media (max-width: 520px) { .sound-toggle .txt { display: none; } }
+
     /* ---------- Demo-Steuerung ---------- */
     .boot-demo-btn { width: auto; margin-top: 25px; padding: 14px 28px; font-size: 16px; }
     .demo-panel { position: fixed; right: 15px; bottom: 15px; z-index: 900; display: flex; flex-direction: column; align-items: flex-end; }
@@ -408,9 +422,12 @@
     <img src="https://www.smartparking.com/wp-content/uploads/2025/04/logo.svg" alt="Smart Parking Logo" class="logo"
          onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='block';">
     <div id="logoFallback" class="logo-fallback">Smart Parking</div>
-    <div class="header-title">
-      <h1>Kamera-Setup<span id="demoTag" class="demo-tag" style="display:none;">DEMO</span></h1>
-      <span class="subtitle">ARVOO Ruby</span>
+    <div class="header-right">
+      <button id="soundToggle" class="sound-toggle" onclick="sound.toggle()"><span class="ico">🔊</span><span class="txt">Ton an</span></button>
+      <div class="header-title">
+        <h1>Kamera-Setup<span id="demoTag" class="demo-tag" style="display:none;">DEMO</span></h1>
+        <span class="subtitle">ARVOO Ruby</span>
+      </div>
     </div>
   </div>
 
@@ -542,6 +559,15 @@
       </select>
     </div>
 
+    <div class="demo-field">
+      <label>Töne testen</label>
+      <div class="demo-actions" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 0;">
+        <button class="btn btn-secondary" onclick="sound.play('detect')">Erkannt</button>
+        <button class="btn btn-secondary" onclick="sound.play('success')">Erfolg</button>
+        <button class="btn btn-secondary" onclick="sound.play('error')">Fehler</button>
+      </div>
+    </div>
+
     <div class="demo-actions">
       <button id="demoResetStats" class="btn btn-secondary">Zähler zurücksetzen</button>
       <button id="demoExit" class="btn btn-secondary">Demo beenden</button>
@@ -636,6 +662,8 @@ function render(s) {
     Object.keys(STATE_SCREENS).forEach(function(k) {
       document.getElementById(STATE_SCREENS[k]).classList.toggle('active', k === s.state);
     });
+    // Beim ersten Laden kein Ton, nur bei echten Wechseln
+    if (lastState !== null) sound.onStateChange(lastState, s.state);
     lastState = s.state;
     window.scrollTo(0, 0);
   }
@@ -753,7 +781,130 @@ function hideConfirm() { document.getElementById('confirmDimmer').classList.remo
 function confirmCancel() { hideConfirm(); cancelPending = true; api.cancel(); }
 
 // ==========================================
-// 3. DEMO-MODUS (simuliert Backend und Kamera)
+// 3. TÖNE
+// ==========================================
+// Werden mit der Web-Audio-API erzeugt, es braucht keine Sounddateien.
+// Browser spielen Ton erst nach der ersten Berührung ab: bis dahin blinkt
+// der Ton-Schalter orange ("Antippen für Ton").
+
+var sound = (function() {
+  var ERROR_REPEAT_MS = 30000;
+  var ctx = null;
+  var enabled = true;
+  var repeatTimer = null;
+
+  try { enabled = localStorage.getItem('soundEnabled') !== '0'; } catch (e) {}
+
+  function context() {
+    if (!ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+      ctx.onstatechange = updateButton;
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  function tone(freq, start, dur, type, vol) {
+    var c = ctx;
+    var t = c.currentTime + start;
+    var osc = c.createOscillator();
+    var gain = c.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(c.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+
+  var SOUNDS = {
+    // Kurzer Doppel-Piep: Kamera erkannt, Einrichtung startet
+    detect: function() {
+      tone(880, 0, 0.12, 'sine', 0.5);
+      tone(1320, 0.14, 0.15, 'sine', 0.5);
+    },
+    // Aufsteigender Dreiklang: Kamera fertig
+    success: function() {
+      [523.25, 659.25, 783.99].forEach(function(f, i) { tone(f, i * 0.13, 0.3, 'triangle', 0.6); });
+      tone(1046.5, 0.39, 0.8, 'triangle', 0.6);
+    },
+    // Tiefer, absteigender Warnton: Fehler
+    error: function() {
+      tone(392, 0, 0.22, 'square', 0.25);
+      tone(392, 0.28, 0.22, 'square', 0.25);
+      tone(262, 0.56, 0.6, 'square', 0.25);
+    }
+  };
+
+  function play(name) {
+    if (!context() || !SOUNDS[name]) return;
+    SOUNDS[name]();
+  }
+
+  function stopRepeat() {
+    clearInterval(repeatTimer);
+    repeatTimer = null;
+  }
+
+  function onStateChange(from, to) {
+    stopRepeat();
+    if (!enabled) return;
+    if (from === 'waiting' && to === 'running') play('detect');
+    if (to === 'done') play('success');
+    if (to === 'error') {
+      play('error');
+      // Fehler wiederholt sich, bis jemand den Bildschirm berührt
+      repeatTimer = setInterval(function() { if (enabled) play('error'); }, ERROR_REPEAT_MS);
+    }
+  }
+
+  function updateButton() {
+    var btn = document.getElementById('soundToggle');
+    var locked = enabled && (!ctx || ctx.state !== 'running');
+    btn.classList.toggle('on', enabled && !locked);
+    btn.classList.toggle('locked', locked);
+    btn.querySelector('.ico').innerText = enabled ? '🔊' : '🔇';
+    btn.querySelector('.txt').innerText = !enabled ? 'Ton aus' : locked ? 'Antippen für Ton' : 'Ton an';
+  }
+
+  function toggle() {
+    // Der Klick selbst schaltet den Ton im Browser frei; dann umschalten,
+    // außer der Ton war nur noch nicht freigegeben.
+    var wasLocked = enabled && (!ctx || ctx.state !== 'running');
+    context();
+    if (!wasLocked) {
+      enabled = !enabled;
+      try { localStorage.setItem('soundEnabled', enabled ? '1' : '0'); } catch (e) {}
+      if (!enabled) stopRepeat();
+    }
+    if (enabled) play('detect');
+    updateButton();
+  }
+
+  // Erste Berührung irgendwo gibt den Ton frei und bestätigt einen Fehler-Alarm
+  ['pointerdown', 'keydown'].forEach(function(ev) {
+    document.addEventListener(ev, function(e) {
+      stopRepeat();
+      if (e.target.closest && e.target.closest('#soundToggle')) return; // regelt toggle() selbst
+      context();
+      updateButton();
+    }, true);
+  });
+
+  // Manche Kiosk-Browser erlauben Ton ohne Berührung
+  context();
+  updateButton();
+  setTimeout(updateButton, 300);
+
+  return { play: play, toggle: toggle, onStateChange: onStateChange };
+})();
+
+// ==========================================
+// 4. DEMO-MODUS (simuliert Backend und Kamera)
 // ==========================================
 
 var demo = (function() {
@@ -1006,7 +1157,7 @@ var demo = (function() {
 })();
 
 // ==========================================
-// 4. START
+// 5. START
 // ==========================================
 
 function startDemo() {
