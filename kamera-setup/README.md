@@ -26,6 +26,10 @@ Name und Passwort sind nicht im Backup enthalten und werden davon nicht übersch
 
 `frontend/index.html` – eine Datei, kein Build nötig.
 
+- Ausgelegt auf einen Bildschirm im Querformat (Monitor oder Tablet quer): links Status,
+  Kameradaten und Knöpfe, rechts alle Schritte – alles auf einer Seite, ohne Scrollen.
+  Unter 900 px Breite (Handy, Hochformat) wird alles untereinander angezeigt.
+
 - Im Normalbetrieb fragt die Seite jede Sekunde das Backend ab.
 
 ### Demo-Modus
@@ -88,6 +92,8 @@ bleiben im Browser gespeichert. `?demo=error` startet direkt mit einem Fehler be
 }
 ```
 
+`steps` wird in jedem Zustand mitgeschickt, auch bei `waiting` (dann alle `pending`),
+damit die rechte Seite den Ablauf schon vorab zeigt.
 `progress` ist `null`, wenn der Schritt keinen Fortschrittsbalken hat.
 Während `firmware` läuft, ist „Abbrechen“ gesperrt.
 
