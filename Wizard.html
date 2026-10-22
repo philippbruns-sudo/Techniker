@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <base target="_top">
   <style>
     body {
@@ -197,17 +198,45 @@
     .mail-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
     .mail-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 15px; }
 
-    .template-placeholder {
+    .section-title {
+      color: #002d56;
+      font-size: 17px;
+      margin: 30px 0 18px 0;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+    }
+    select {
+      width: 100%;
+      padding: 12px 15px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+      background-color: #fdfdfd;
+      font-family: inherit;
+    }
+    select:focus { border-color: #ff6600; outline: none; }
+
+    .file-drop-zone {
       border: 2px dashed #cbd5e1;
       background-color: #f8fafc;
       border-radius: 8px;
-      padding: 25px 20px;
+      padding: 30px 20px;
       text-align: center;
-      color: #64748b;
-      font-size: 14px;
-      margin-top: 20px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
     }
-    .template-placeholder strong { display: block; color: #4a5568; font-size: 15px; margin-bottom: 4px; }
+    .file-drop-zone:hover, .file-drop-zone.dragover { border-color: #ff6600; background-color: #fffaf0; }
+    .file-drop-zone input[type="file"] {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+    .drop-zone-icon { font-size: 36px; margin-bottom: 10px; }
+    .drop-zone-text { font-size: 15px; color: #4a5568; font-weight: 500; }
+    .drop-zone-hint { font-size: 13px; color: #94a3b8; margin-top: 5px; }
+    .map-preview { display: none; max-width: 100%; max-height: 260px; margin-top: 15px; border-radius: 6px; }
 
     /* Zusammenfassung */
     .summary-table { width: 100%; border-collapse: collapse; font-size: 15px; margin-top: 10px; }
@@ -480,12 +509,92 @@
       <h2>EasyPark einrichten</h2>
       <p class="step-intro">Richte die Site für EasyPark ein, fülle das EasyPark-Excel-Sheet aus und sende es per E-Mail an EasyPark.</p>
 
-      <div class="template-placeholder">
-        <strong>📊 EasyPark Excel-Vorlage</strong>
-        Die Vorlage wird in einem nächsten Schritt hier im Projekt hinterlegt.
+      <h3 class="section-title">📊 EasyPark-Datenblatt</h3>
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label for="epObjektname">Objektname</label>
+          <input type="text" id="epObjektname" placeholder="Straße, PLZ Ort, Kunde">
+        </div>
+        <div class="form-group">
+          <label for="epAnschrift">Anschrift der Parkfläche</label>
+          <input type="text" id="epAnschrift" placeholder="Straße, PLZ Ort">
+        </div>
+        <div class="form-group">
+          <label for="epZonencode">Zonencode</label>
+          <input type="text" id="epZonencode" placeholder="wird von EasyPark vergeben">
+        </div>
+        <div class="form-group">
+          <label for="epStart">Starttermin</label>
+          <input type="text" id="epStart" value="Asap">
+        </div>
+        <div class="form-group">
+          <label for="epGated">Gated</label>
+          <select id="epGated">
+            <option>Freeflow</option>
+            <option>Gated</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="epAnpr">ANPR-Anbindung</label>
+          <input type="text" id="epAnpr" value="On-Street Logic">
+        </div>
+        <div class="form-group">
+          <label for="epLage">Lage der Parkzone (Breiten-, Längengrad)</label>
+          <input type="text" id="epLage" placeholder="z.B. 53.965193, 10.879221">
+        </div>
+        <div class="form-group">
+          <label for="epPlaetze">Anzahl Parkplätze</label>
+          <input type="text" id="epPlaetze">
+        </div>
+        <div class="form-group">
+          <label for="epPreis">Preis pro Stunde</label>
+          <select id="epPreis">
+            <option>Größer/ gleich €2 pro Stunde</option>
+            <option>Weniger als €2 pro Stunde</option>
+            <option>externally</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="epMwst">Zone MwSt.-pflichtig</label>
+          <select id="epMwst">
+            <option>Ja</option>
+            <option>Nein</option>
+            <option>unknown</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="epKontakt">Kontaktperson</label>
+          <input type="text" id="epKontakt" value="Sebastian Marenbach">
+        </div>
+        <div class="form-group">
+          <label for="epUuid">UUID</label>
+          <input type="text" id="epUuid" placeholder="nur bei automatic / dual flow">
+        </div>
+        <div class="form-group">
+          <label for="epBemerkungen">Bemerkungen</label>
+          <input type="text" id="epBemerkungen" placeholder="Wichtige Bemerkungen oder Wünsche">
+        </div>
+        <div class="form-group full-width">
+          <label for="epTarife">Parktarife (eine Angabe pro Zeile, max. 5)</label>
+          <textarea id="epTarife" placeholder="5€ / h&#10;Höchstsatz 15€&#10;24/7&#10;Generische Beschilderung&#10;Zonen-Code per Mail, wird durch SP hinzugefügt"></textarea>
+        </div>
+        <div class="form-group full-width">
+          <label>Mapping (Satellitenbild mit eingezeichneter Parkfläche)</label>
+          <div class="file-drop-zone" id="mapDropZone">
+            <div class="drop-zone-icon">🗺️</div>
+            <div class="drop-zone-text" id="mapDropText">Bild (PNG/JPG) auswählen oder hier ablegen</div>
+            <div class="drop-zone-hint">Wird im Reiter „Mapping“ der Excel-Datei eingefügt</div>
+            <img id="mapPreview" class="map-preview" alt="">
+            <input type="file" id="mapFileInput" accept="image/png, image/jpeg">
+          </div>
+        </div>
+      </div>
+      <div class="mail-actions">
+        <button type="button" class="btn-submit" id="excelBtn" onclick="downloadEasyParkExcel()">⬇️ Excel erzeugen &amp; herunterladen</button>
       </div>
 
-      <div class="mail-meta" style="margin-top: 25px;">
+      <h3 class="section-title">✉️ E-Mail an EasyPark</h3>
+      <div class="mail-meta">
         <div class="form-group">
           <label for="epTo">Empfänger</label>
           <input type="email" id="epTo">
@@ -541,6 +650,14 @@
 
 <div id="toastMessage" class="toast"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script>
+  // EasyPark-Datenblatt-Vorlage (vorlagen/EasyPark_Datenblatt_Vorlage.xlsx) als Base64.
+  // Nach Änderungen an der Vorlage neu einbetten: python3 vorlagen/vorlage_einbetten.py
+  // EASYPARK_TEMPLATE_START
+  var EASYPARK_TEMPLATE_BASE64 = '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UYFcVCAXFchFBXJRgVxUIBcVyEUFclGBXFQgFxXIRQVyUYFcVCAXFchFBXJRgVxUIBcVyEUFclGBXFQgFxXIRQVyUYFcVCAXFchFBXJRgVxUIBcVyEUFclGBXFQgF5XIRSVyUYlcVCIXlchFJXJRiVxUIheVyEUlclGJXFQiF5XIRSVyUYlcVCIXlchFJXJRiVxUIheVyEUlclGJXFQiF5XIRSVyUYlcVCIXlchFJXJRiVxUIheVyEUlclGJXFQiF5XIRSVyUYlcVCIXlchFJXJRiVxUIheVyEUlclGJXFQiF5XIRSVyUYlcVCIXlchFJXJRiVxUIheVyEUlclGJXFQiF5XIRSVyUYlcVCIXlchFJXJRiVxUIheVyEUlclGJXFQiF5XIRSVyUYlcVCIXlchFJXJRiVxUIheVyEUlclGJXFQiF5XIRSVyUYlcVCIXlchFJXJRiVxUIheVyEUlclGJXFQiF5XIRSVyUYlcVCIXVchFFXJRhVxUIRdVyEUVclGFXFQhF1XIRRVyUYVcVCEXVchFFXJRhVxUIRdVyEUVclGFXFQhF1XIRRVyUYVcVCEXVchFFXJRhVxUIRdVyEUVclGFXFQhF1XIRRVyUYVcVCEXVchFFXJRhVxUIRdVyEUVclGFXFQhF1XIRRVyUYVcVCEXVchFFXJRhVxUIRdVyEUVclGFXFQhF1XIRRVyUYVcVCEXVchFFXJRhVxUIRdVyEUVclGFXFQhF1XIRRVyUYVcVCEXVchFFXJRhVxUIRdVyEUVclGFXFQhF1XIRRVyUYVcVCEXVchFFXJRhVxUIRdVyEUVclGFXFQhF1XIRRVyUYVcVCEXVchFFXJRhVxUIRfVyEU1clGNXFQjF9XIRTVyUY1cVCMX1chFNXJRjVxUIxfVyEU1clGNXFQjF9XIRTVyUY1cVCMX1chFNXJRjVxUIxfVyEU1clGNXFQjF9XIRTVyUY1cVCMX1chFNXJRjVxUIxfVyEU1clGNXFQjF9XIRTVyUY1cVCMX1chFNXJRjVxUIxfVyEU1clGNXFQjF9XIRTVyUY1cVCMX1chFNXJRjVxUIxfVyEU1clGNXFQjF9XIRTVyUY1cVCMX1chFNXJRjVxUIxfVyEU1clGNXFQjF9XIRTVyUY1cVCMX1chFNXJRjVxUIxfVyEU1clGNXFQjF9XIRTVyUY1cVCMX1chF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';
+  // EASYPARK_TEMPLATE_END
+</script>
 <script>
   // ==========================================
   // KONFIGURATION – Empfänger hier eintragen
@@ -587,7 +704,7 @@
     if (kicker) kicker.innerText = 'Schritt ' + (idx + 1) + ' von ' + flow.length;
 
     if (name === 'kba') prefillMail('kba');
-    if (name === 'easyparkSetup') prefillMail('ep');
+    if (name === 'easyparkSetup') { prefillDatasheet(); prefillMail('ep'); }
     if (name === 'summary') renderSummary();
 
     document.getElementById('wizardActions').style.display = name === 'start' ? 'none' : 'flex';
@@ -771,6 +888,157 @@
   }
 
   // ==========================================
+  // EASYPARK-DATENBLATT (EXCEL)
+  // ==========================================
+
+  // Felder aus den Site-Stammdaten vorbelegen, sofern noch leer
+  function prefillDatasheet() {
+    var site = getSite();
+    var defaults = {
+      epObjektname: [site.adresse, site.kunde].filter(Boolean).join(', '),
+      epAnschrift: site.adresse,
+      epPlaetze: site.stellplaetze
+    };
+    Object.keys(defaults).forEach(function(id) {
+      var input = document.getElementById(id);
+      if (input.value.trim() === '') input.value = defaults[id];
+    });
+  }
+
+  var mapImage = null; // { base64, extension, width, height }
+  var mapDropZone = document.getElementById('mapDropZone');
+  var mapFileInput = document.getElementById('mapFileInput');
+
+  ['dragenter', 'dragover'].forEach(function(ev) {
+    mapDropZone.addEventListener(ev, function() { mapDropZone.classList.add('dragover'); });
+  });
+  ['dragleave', 'drop'].forEach(function(ev) {
+    mapDropZone.addEventListener(ev, function() { mapDropZone.classList.remove('dragover'); });
+  });
+
+  mapFileInput.addEventListener('change', function() {
+    var file = this.files && this.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(evt) {
+      var dataUrl = evt.target.result;
+      var img = new Image();
+      img.onload = function() {
+        mapImage = {
+          base64: dataUrl.split(',')[1],
+          extension: file.type === 'image/png' ? 'png' : 'jpeg',
+          width: img.naturalWidth,
+          height: img.naturalHeight
+        };
+        var preview = document.getElementById('mapPreview');
+        preview.src = dataUrl;
+        preview.style.display = 'inline-block';
+        document.getElementById('mapDropText').innerText = '✓ ' + file.name;
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function val(id) {
+    return document.getElementById(id).value.trim();
+  }
+
+  // Zahlen als Zahl in die Excel schreiben, alles andere als Text
+  function cellValue(text) {
+    if (text === '') return null;
+    return /^\d+$/.test(text) ? Number(text) : text;
+  }
+
+  function easyParkFileName() {
+    var site = getSite();
+    var base = 'EasyPark ' + [site.kunde, site.adresse].filter(Boolean).join(' ');
+    var umlaute = { 'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue', 'ß': 'ss' };
+    return base.replace(/[äöüÄÖÜß]/g, function(c) { return umlaute[c]; })
+      .replace(/[^0-9A-Za-z]+/g, '_').replace(/^_+|_+$/g, '') + '.xlsx';
+  }
+
+  function base64ToArrayBuffer(base64) {
+    var binary = atob(base64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+  }
+
+  function downloadEasyParkExcel() {
+    if (typeof ExcelJS === 'undefined') {
+      showToast('Excel-Bibliothek konnte nicht geladen werden.', 'error');
+      return;
+    }
+    var btn = document.getElementById('excelBtn');
+    btn.disabled = true;
+
+    var wb = new ExcelJS.Workbook();
+    wb.xlsx.load(base64ToArrayBuffer(EASYPARK_TEMPLATE_BASE64)).then(function() {
+      var ws = wb.getWorksheet('Dokument');
+      var fields = {
+        C3: val('epObjektname'),
+        C5: val('epZonencode'),
+        C7: val('epAnschrift'),
+        C9: val('epStart'),
+        C12: val('epGated'),
+        C14: val('epAnpr'),
+        C16: val('epLage'),
+        C18: val('epPlaetze'),
+        C20: val('epPreis'),
+        C22: val('epUuid'),
+        C24: val('epBemerkungen'),
+        C27: val('epKontakt'),
+        C36: val('epMwst')
+      };
+      Object.keys(fields).forEach(function(addr) {
+        ws.getCell(addr).value = cellValue(fields[addr]);
+      });
+
+      // Parktarife: eine Zeile pro Zelle C50 bis C54
+      var tarife = document.getElementById('epTarife').value.split('\n')
+        .map(function(l) { return l.trim(); })
+        .filter(Boolean);
+      for (var i = 0; i < 5; i++) {
+        ws.getCell('C' + (50 + i)).value = tarife[i] || null;
+      }
+
+      // Verwendungszweck (=C3) beim Öffnen neu berechnen lassen
+      wb.calcProperties.fullCalcOnLoad = true;
+
+      if (mapImage) {
+        var mapSheet = wb.getWorksheet('Mapping');
+        var imageId = wb.addImage({ base64: mapImage.base64, extension: mapImage.extension });
+        var scale = Math.min(1, 900 / mapImage.width);
+        mapSheet.addImage(imageId, {
+          tl: { col: 1, row: 2 },
+          ext: { width: mapImage.width * scale, height: mapImage.height * scale }
+        });
+      }
+
+      return wb.xlsx.writeBuffer();
+    }).then(function(buffer) {
+      var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = easyParkFileName();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
+
+      var chk = document.getElementById('chkEpExcel');
+      chk.checked = true;
+      syncTask(chk);
+      btn.disabled = false;
+      showToast(mapImage ? 'Excel erstellt.' : 'Excel erstellt (ohne Mapping-Bild).', 'success');
+    }).catch(function(err) {
+      btn.disabled = false;
+      showToast('Fehler beim Erstellen: ' + err.message, 'error');
+    });
+  }
+
+  // ==========================================
   // ZUSAMMENFASSUNG & PROTOKOLL
   // ==========================================
   function status(done, applicable) {
@@ -864,9 +1132,14 @@
   function restartWizard() {
     document.querySelectorAll('.wizard-body input').forEach(function(input) {
       if (input.type === 'checkbox') { input.checked = false; syncTask(input); }
-      else { input.value = ''; input.classList.remove('invalid'); }
+      else { input.value = input.defaultValue; input.classList.remove('invalid'); }
     });
     document.querySelectorAll('.wizard-body textarea').forEach(function(ta) { ta.value = ''; });
+    document.querySelectorAll('.wizard-body select').forEach(function(sel) { sel.selectedIndex = 0; });
+    mapImage = null;
+    mapFileInput.value = '';
+    document.getElementById('mapPreview').style.display = 'none';
+    document.getElementById('mapDropText').innerText = 'Bild (PNG/JPG) auswählen oder hier ablegen';
     document.querySelectorAll('.choice-card').forEach(function(el) { el.classList.remove('selected'); });
     document.getElementById('handoverNoInfo').style.display = 'none';
     state = { current: 'start', handover: null, easypark: null };
