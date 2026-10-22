@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kennzeichen-Jagd</title>
+<style>
+  :root{
+    --bg:#0c111c; --panel:#171f30; --panel2:#212a40; --text:#e9edf5; --muted:#8b97ae;
+    --accent:#36e0a0; --cyan:#33d6ff; --warn:#ffb020; --bad:#ff4d5e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+  #app{max-width:1000px;margin:0 auto;padding:12px 16px 28px}
+  button{font:inherit;color:inherit;cursor:pointer;border:0}
+
+  header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  h1{font-size:21px;margin:0}
+  h1 span{color:var(--cyan)}
+  .hud{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch}
+  .stat{background:var(--panel);border-radius:10px;padding:5px 10px;min-width:68px}
+  .stat small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.7px}
+  .stat b{font-size:16px;font-variant-numeric:tabular-nums}
+  #combo.hot{color:var(--warn)}
+  .lives i{font-style:normal;margin-right:1px}
+  .lives i.off{filter:grayscale(1);opacity:.25}
+  .btn{background:var(--panel2);border-radius:10px;padding:8px 12px;font-weight:600}
+
+  #wanted{display:flex;align-items:center;gap:12px;background:linear-gradient(90deg,#4a0f18,#251019);border:2px solid var(--bad);
+    border-radius:12px;padding:8px 12px;margin-bottom:10px;min-height:56px;transition:opacity .3s}
+  #wanted.idle{border-color:#2a3348;background:var(--panel);opacity:.75}
+  #wanted.idle .wlabel{color:var(--muted)}
+  #wanted.hit{border-color:var(--accent);background:linear-gradient(90deg,#0f3d2c,#10251f)}
+  .wlabel{font-weight:800;color:#ff8a95;font-size:13px;letter-spacing:.6px;text-transform:uppercase}
+  .wlabel small{display:block;font-weight:500;color:#c8a3a8;text-transform:none;letter-spacing:0;font-size:12px}
+  #wanted.active .siren{animation:siren .5s infinite alternate}
+  .siren{font-size:24px}
+
+  /* Kennzeichen (HTML) */
+  .plate{display:inline-flex;align-items:stretch;background:#f5f5f0;border:2px solid #111;border-radius:5px;height:34px;
+    font-family:"Arial Narrow","Roboto Condensed",Arial,sans-serif;font-weight:800;color:#111;overflow:hidden;flex:0 0 auto}
+  .plate .eu{background:#1a46c8;color:#fff;font-size:11px;display:flex;align-items:flex-end;justify-content:center;padding:0 4px 3px;width:18px;
+    background-image:radial-gradient(circle at 50% 35%,#ffd400 0 1.2px,transparent 1.5px)}
+  .plate .txt{padding:0 8px;font-size:23px;line-height:30px;letter-spacing:.5px;white-space:nowrap}
+  .plate.sm{height:26px}
+  .plate.sm .txt{font-size:17px;line-height:22px;padding:0 6px}
+  .plate.sm .eu{width:14px;font-size:9px}
+  .plate.bad{background:#ddd;opacity:.75}
+
+  #stage{position:relative;border-radius:14px;overflow:hidden;background:#000;box-shadow:0 10px 30px rgba(0,0,0,.45);
+    touch-action:manipulation;user-select:none;-webkit-user-select:none}
+  #stage::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.07) 0 1px,transparent 1px 3px);
+    box-shadow:inset 0 0 70px rgba(0,0,0,.55)}
+  canvas{display:block;width:100%;cursor:none}
+
+  .loghead{display:flex;justify-content:space-between;align-items:baseline;margin:14px 0 6px;color:var(--muted);font-size:11px;
+    text-transform:uppercase;letter-spacing:.8px}
+  #log{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:6px}
+  .shot{background:var(--panel);border-radius:10px;padding:7px 9px;display:flex;flex-direction:column;gap:5px;border-left:3px solid var(--accent);
+    animation:slidein .25s ease-out}
+  .shot.bad{border-left-color:var(--bad)}
+  .shot.wanted{border-left-color:var(--warn);background:linear-gradient(90deg,#3a2a0b,var(--panel))}
+  .shot .meta{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:6px}
+  .shot .meta b{color:var(--accent);font-weight:700}
+  .shot.bad .meta b{color:var(--bad)}
+  .shot.wanted .meta b{color:var(--warn)}
+  .empty-log{color:#58637a;font-size:13px}
+  #fact{margin-top:12px;font-size:12px;color:#6c7891;border-top:1px solid #1f2739;padding-top:8px}
+  #fact b{color:var(--cyan);font-weight:600}
+
+  #banner{position:fixed;left:50%;top:24%;transform:translate(-50%,-50%) scale(.6);opacity:0;z-index:70;pointer-events:none;
+    background:linear-gradient(135deg,#ff4d5e,#ffb020);color:#160b00;font-weight:900;font-size:26px;padding:12px 26px;border-radius:14px;
+    transition:all .3s;box-shadow:0 10px 30px rgba(0,0,0,.5);text-align:center;white-space:nowrap}
+  #banner.good{background:linear-gradient(135deg,#36e0a0,#33d6ff);color:#04140e}
+  #banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+  #overlay{position:fixed;inset:0;background:rgba(5,8,15,.84);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+  #overlay.hidden{display:none}
+  .card{background:var(--panel);border-radius:18px;max-width:580px;width:100%;padding:22px;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  .card h2{margin:0 0 6px;font-size:26px}
+  .card p{color:#c3cbdb;line-height:1.5;margin:8px 0}
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}
+  .legend div{background:var(--panel2);border-radius:10px;padding:8px 10px;font-size:13px;color:#c3cbdb;line-height:1.35}
+  .legend b{color:var(--text)}
+  .go{width:100%;margin-top:10px;padding:14px;font-size:17px;border-radius:12px;background:linear-gradient(135deg,#36e0a0,#33d6ff);color:#05121c;font-weight:800}
+  .results{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}
+  .results div{background:var(--panel2);border-radius:10px;padding:10px}
+  .results small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+  .results b{font-size:20px}
+  .rank{font-size:15px;color:var(--cyan);font-weight:700}
+
+  @keyframes siren{from{filter:hue-rotate(0)}to{filter:hue-rotate(200deg);transform:scale(1.15)}}
+  @keyframes slidein{from{opacity:0;transform:translateY(-6px)}}
+
+  @media (max-width:600px){
+    h1{font-size:18px}
+    .stat{min-width:0;padding:4px 8px}
+    .stat b{font-size:14px}
+    .plate{height:30px} .plate .txt{font-size:19px;line-height:26px}
+    .legend,.results{grid-template-columns:1fr}
+    #banner{font-size:19px;padding:10px 16px}
+    #log{grid-template-columns:1fr 1fr}
+    #log .shot:nth-child(n+5){display:none}
+    .shot .meta span{display:none}
+    .plate.sm .txt{font-size:14px;padding:0 4px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>📸 Kennzeichen-<span>Jagd</span></h1>
+    <div class="hud">
+      <div class="stat"><small>Punkte</small><b id="score">0</b></div>
+      <div class="stat"><small>Combo</small><b id="combo">×1</b></div>
+      <div class="stat"><small>Erfasst</small><b id="caught">0</b></div>
+      <div class="stat"><small>Lesequote</small><b id="rate">–</b></div>
+      <div class="stat"><small>Datenlücken</small><b class="lives" id="lives"></b></div>
+      <button class="btn" id="muteBtn" title="Ton an/aus">🔊</button>
+    </div>
+  </header>
+
+  <div id="wanted" class="idle">
+    <div class="siren">🚨</div>
+    <div class="wlabel" id="wlabel">Fahndungsliste<small>Aktuell keine Fahndung</small></div>
+    <div id="wplate"></div>
+  </div>
+
+  <div id="stage"><canvas id="cv"></canvas></div>
+
+  <div class="loghead"><span>🧾 Erfassungsprotokoll (OCR)</span><span id="logcount"></span></div>
+  <div id="log"><div class="empty-log">Noch keine Aufnahmen.</div></div>
+  <div id="fact"></div>
+</div>
+
+<div id="banner"></div>
+<div id="overlay"><div class="card" id="card"></div></div>
+
+<script>
+(() => {
+  // =========================================================
+  //  Konstanten
+  // =========================================================
+  const D0 = 10;                       // Referenztiefe für die Perspektive
+  const PLATE_W = 0.4;                 // Kennzeichenbreite in Spurbreiten (bewusst comic-groß)
+  const MAX_LIVES = 5;
+  const DISTS = ['B','M','HH','K','F','S','D','DO','E','HB','L','DD','H','N','MS','OS','KA','HD','OL','BI','AC','KI','HRO','GÖ','WÜ','FR','RO','MZ','WI','SB','BN','HAL','EF','PB','LU','UL','TÜ','HN'];
+  const LETTERS = 'ABCDEFGHJKLMNPRSTUVWXYZ';
+  const FUN = [['HU','HN','5'],['BI','ER','4'],['KA','FE','1'],['MA','US','3'],['ES','EL','1'],['IN','GO','8'],['WI','LD','1'],
+               ['BO','SS','1'],['PS','ST','1'],['OH','NE','2'],['MÜ','DE','8'],['HH','EY','1'],['DU','DA','7'],['LÖ','WE','1']];
+  const LOOKALIKE = { B:'8', 8:'B', O:'0', 0:'D', D:'0', S:'5', 5:'S', Z:'2', 2:'Z', I:'1', 1:'I', G:'6', 6:'G', E:'F', F:'E', P:'R', R:'P', M:'N', N:'M', U:'V', V:'U', C:'G', H:'N', K:'X', A:'4', 4:'A', 7:'1', 3:'8' };
+  const COLORS = ['#d64045','#f4f1ea','#1f2833','#3d7dd8','#9aa3ad','#2d6a4f','#e07a24','#6c4ab6','#b8b8b8','#8a1c2b','#f2c14e','#4b5563','#0f766e'];
+  const VTYPES = [
+    { n:'Limousine',  w:.60, h:.46, p:38 },
+    { n:'SUV',        w:.64, h:.56, p:20 },
+    { n:'Kleinwagen', w:.52, h:.44, p:18 },
+    { n:'Transporter',w:.66, h:.74, p:10 },
+    { n:'Sportwagen', w:.60, h:.36, p:7 },
+    { n:'Polizei',    w:.60, h:.48, p:3, police:true },
+    { n:'Taxi',       w:.60, h:.46, p:4, taxi:true },
+  ];
+  const CRITTERS = [
+    { e:'🐄', h:.55, msg:'Muh! Kühe haben kein Kennzeichen.' },
+    { e:'🦆', h:.24, msg:'Quak! Enten fahren steuerfrei.' },
+    { e:'🚲', h:.42, msg:'Fahrräder brauchen kein Kennzeichen.' },
+    { e:'🛒', h:.34, msg:'Herrenloser Einkaufswagen – ohne Kennzeichen!' },
+    { e:'🐕', h:.30, msg:'Wuff! Hunde haben nur eine Steuermarke.' },
+    { e:'🦔', h:.20, msg:'Ein Igel. Zu stachelig für die OCR.' },
+    { e:'🐓', h:.28, msg:'Kikeriki – das Huhn hat kein HU-HN-Kennzeichen.' },
+  ];
+  const FACTS = [
+    'Kennzeichenerkennung heißt international <b>ANPR</b> oder <b>LPR</b> – Automatic Number Plate Recognition.',
+    'Die Kamera arbeitet oft mit <b>Infrarot</b>: Kennzeichen sind retroreflektierend und leuchten nachts im IR-Licht hell auf.',
+    'Die Erkennung läuft in Stufen: <b>Fahrzeug finden → Kennzeichen lokalisieren → Zeichen segmentieren → OCR</b>.',
+    'Typische OCR-Verwechsler: <b>B ↔ 8</b>, <b>O ↔ 0 ↔ D</b>, <b>S ↔ 5</b>, <b>Z ↔ 2</b> – darum prüfen Systeme Formate und Plausibilität.',
+    'Der Kamerawinkel ist entscheidend: Zu flach oder zu steil, und die Zeichen werden verzerrt.',
+    'Kurze <b>Belichtungszeiten</b> verhindern Bewegungsunschärfe – auch bei schneller Einfahrt.',
+    'Im Parkhaus ersetzt die Kennzeichenerfassung das Papierticket: <b>Ticketless Parking</b>.',
+    'Schmutz, Schnee oder Anhängerkupplungen vor dem Kennzeichen sind echte Herausforderungen für ANPR.',
+    'Ein Erkennungsergebnis kommt meist mit einem <b>Konfidenzwert</b> – unter einer Schwelle wird manuell geprüft.',
+  ];
+
+  // =========================================================
+  //  Helfer
+  // =========================================================
+  const $ = s => document.querySelector(s);
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  function wpick(list) {
+    let s = list.reduce((a, x) => a + x.p, 0), r = Math.random() * s;
+    for (const x of list) { if ((r -= x.p) <= 0) return x; }
+    return list[0];
+  }
+  function mulberry(seed) {
+    return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
+  function shade(hex, amt) {
+    const n = parseInt(hex.slice(1), 16);
+    const f = c => clamp(Math.round(c + amt), 0, 255);
+    return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+  }
+  function mixColor(a, b, t) {
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const c = s => Math.round(lerp((pa >> s) & 255, (pb >> s) & 255, t));
+    return `rgb(${c(16)},${c(8)},${c(0)})`;
+  }
+  const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+
+  // Kennzeichen
+  function genPlate() {
+    if (Math.random() < .07) { const f = pick(FUN); return { dist: f[0], letters: f[1], digits: f[2], e: false }; }
+    const dist = pick(DISTS);
+    const ln = Math.random() < .35 ? 1 : 2;
+    let letters = '';
+    for (let i = 0; i < ln; i++) letters += pick(LETTERS);
+    const maxDig = Math.min(4, 8 - dist.length - ln);
+    const nd = clamp(Math.ceil(Math.random() * maxDig + (Math.random() < .5 ? 1 : 0)), 1, maxDig);
+    const digits = String(Math.floor(rand(Math.pow(10, nd - 1), Math.pow(10, nd))));
+    return { dist, letters, digits, e: Math.random() < .12 };
+  }
+  const plateStr = p => `${p.dist}-${p.letters} ${p.digits}${p.e ? 'E' : ''}`;
+  function decoy(p) {
+    const SIM = { B:'R', R:'P', P:'R', M:'N', N:'M', E:'F', F:'E', C:'G', G:'C', U:'V', V:'U', K:'X', X:'K', T:'Y', Y:'T', H:'N', L:'E', S:'Z', Z:'S', A:'R', D:'B', W:'V', J:'U' };
+    for (let tries = 0; tries < 20; tries++) {
+      const q = { ...p }, r = Math.random();
+      if (r < .45) {
+        const i = Math.floor(Math.random() * q.digits.length);
+        let d = String((+q.digits[i] + 1 + Math.floor(Math.random() * 8)) % 10);
+        if (i === 0 && d === '0') d = '9';
+        q.digits = q.digits.slice(0, i) + d + q.digits.slice(i + 1);
+      } else if (r < .85) {
+        const i = Math.floor(Math.random() * q.letters.length);
+        const c = q.letters[i];
+        q.letters = q.letters.slice(0, i) + (SIM[c] || pick(LETTERS)) + q.letters.slice(i + 1);
+      } else {
+        q.dist = pick(DISTS.filter(d => d.length === p.dist.length && d !== p.dist)) || q.dist;
+      }
+      if (plateStr(q) !== plateStr(p)) return q;
+    }
+    return genPlate();
+  }
+  function garble(str, amount) {
+    return [...str].map(ch => {
+      if (ch === ' ' || ch === '-') return ch;
+      const r = Math.random();
+      if (r < amount * .45) return '?';
+      if (r < amount && LOOKALIKE[ch]) return LOOKALIKE[ch];
+      return ch;
+    }).join('');
+  }
+  const plateHTML = (txt, cls = '') => `<span class="plate ${cls}"><span class="eu">D</span><span class="txt">${txt.replace('-', '&nbsp;')}</span></span>`;
+
+  // =========================================================
+  //  Sound
+  // =========================================================
+  let muted = false, AC = null;
+  function ac() { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} return AC; }
+  function tone(freq, dur = .08, type = 'sine', vol = .05, delay = 0) {
+    if (muted || !ac()) return;
+    const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g).connect(AC.destination); o.start(t); o.stop(t + dur + .02);
+  }
+  function shutter() {
+    if (muted || !ac()) return;
+    const len = .07, buf = AC.createBuffer(1, AC.sampleRate * len, AC.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
+    const s = AC.createBufferSource(), g = AC.createGain();
+    s.buffer = buf; g.gain.value = .25; s.connect(g).connect(AC.destination); s.start();
+  }
+  const sfx = {
+    ok:     () => { tone(880, .06, 'sine', .05, .03); tone(1320, .09, 'sine', .05, .09); },
+    bad:    () => tone(140, .2, 'square', .035),
+    miss:   () => { tone(300, .14, 'sawtooth', .04); tone(200, .2, 'sawtooth', .04, .12); },
+    siren:  () => { for (let i = 0; i < 4; i++) tone(i % 2 ? 700 : 950, .18, 'triangle', .04, i * .19); },
+    jackpot:() => [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, .14, 'sine', .05, i * .08)),
+    moo:    () => { tone(140, .35, 'sawtooth', .04); tone(110, .3, 'sawtooth', .03, .25); },
+    ufo:    () => { for (let i = 0; i < 8; i++) tone(600 + i * 120, .08, 'sine', .04, i * .05); },
+  };
+
+  // =========================================================
+  //  Canvas & Perspektive
+  // =========================================================
+  const cv = $('#cv'), ctx = cv.getContext('2d');
+  let W = 800, H = 480, hY = 140, roadPx = 880, DPR = 1, city = [];
+  let S = null;
+
+  function resize() {
+    W = $('#stage').clientWidth;
+    H = W < 600 ? Math.round(W * 1.08) : Math.round(Math.min(W * .6, window.innerHeight * .68, 600));
+    H = Math.max(H, 300);
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = W * DPR; cv.height = H * DPR; cv.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    hY = H * .3;
+    const L = S ? S.L : (W < 600 ? 2 : 3);
+    roadPx = W * (L === 2 ? 1.3 : 1.1);
+    // Skyline
+    const r = mulberry(7); city = []; let x = -10;
+    while (x < W + 10) {
+      const w = 18 + r() * 46, h = (14 + r() * 58) * (H / 520);
+      const win = []; for (let wy = 6; wy < h - 4; wy += 7) for (let wx = 4; wx < w - 4; wx += 7) if (r() < .45) win.push([wx, wy]);
+      city.push({ x, w, h, win, c: r() });
+      x += w + r() * 6;
+    }
+  }
+
+  const fracOf = d => D0 / d;
+  const Yd = d => hY + (H - hY) * D0 / d;
+  const LPd = d => roadPx / S.L * D0 / d;
+  const Xat = (xu, y) => W / 2 + xu * roadPx / S.L * (y - hY) / (H - hY);
+  const zf = () => S.L === 2 ? .40 : .42;   // Erfassungszone fern
+  const zn = () => S.L === 2 ? .74 : .78;   // Erfassungszone nah
+
+  function poly(pts, fill) { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); }
+  function rr(x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function strip(xu, y1, y2, half, fill) { poly([[Xat(xu - half, y1), y1], [Xat(xu + half, y1), y1], [Xat(xu + half, y2), y2], [Xat(xu - half, y2), y2]], fill); }
+
+  // =========================================================
+  //  Spielzustand
+  // =========================================================
+  function newState() {
+    return {
+      L: W < 600 ? 2 : 3, t: 0, score: 0, combo: 0, bestCombo: 0, lives: MAX_LIVES,
+      caught: 0, missed: 0, shots: 0, critterShots: 0, ufoHits: 0, wantedHits: 0, wantedMiss: 0, dirtyCleaned: 0,
+      objs: [], fx: [], snaps: [], flash: 0, cool: 0, id: 0,
+      spawnT: 1.2, critterT: rand(8, 14), wantedT: rand(14, 20), ufoT: rand(35, 60), rainT: rand(25, 45), rain: 0, rainOn: false,
+      wanted: null, plan: [], ufo: null, drops: [],
+      mouse: { x: -999, y: -999, in: false, touchT: 0 },
+      running: false, paused: false, factT: 0, factI: Math.floor(Math.random() * FACTS.length),
+    };
+  }
+
+  const zoneLen = () => D0 / zf() - D0 / zn();
+  const speed = () => zoneLen() * Math.min(2.0, .8 + S.t * .0065);
+  const spawnGap = () => Math.max(.5, 1.6 - S.t * .0065) * rand(.7, 1.3);
+  const IN_D = () => D0 / .17, OUT_D = () => D0 / 1.7;
+
+  function laneFree(lane, out) {
+    const objs = S.objs.filter(o => o.lane === lane);
+    if (out) { const mn = Math.min(...objs.map(o => o.d), Infinity); return mn >= OUT_D() * 1.3; }
+    const mx = Math.max(...objs.map(o => o.d), 0); return mx <= IN_D() / 1.28;
+  }
+
+  function spawnVehicle(forcePlate, isWanted) {
+    const lanes = [];
+    for (let i = 0; i < S.L; i++) lanes.push(i);
+    lanes.sort(() => Math.random() - .5);
+    // Fahndungsfahrzeuge kommen immer entgegen, normale Autos zu ~25 % auf der Ausfahrt
+    const order = forcePlate ? lanes.filter(l => l > 0) : (Math.random() < .25 ? [0, ...lanes.filter(l => l)] : [...lanes.filter(l => l), 0]);
+    for (const lane of order) {
+      const out = lane === 0;
+      if (!laneFree(lane, out)) continue;
+      const vt = wpick(VTYPES);
+      const o = {
+        kind: 'car', id: ++S.id, lane, out, x: lane - (S.L - 1) / 2 + rand(-.04, .04),
+        d: out ? OUT_D() : IN_D(), v: speed() * (out ? .8 : 1) * rand(.88, 1.12),
+        vt, w: vt.w, h: vt.h,
+        color: vt.police ? '#eef2f4' : vt.taxi ? '#f3d34a' : pick(COLORS),
+        plate: forcePlate || genPlate(), wanted: !!isWanted,
+        dirt: !forcePlate && Math.random() < .12 ? 1 : 0,
+        captured: false, missedFlag: false, alpha: 0, seed: Math.floor(Math.random() * 1e9),
+      };
+      S.objs.push(o);
+      return true;
+    }
+    return false;
+  }
+
+  function spawnCritter() {
+    const lane = 1 + Math.floor(Math.random() * (S.L - 1));
+    if (!laneFree(lane, false)) return;
+    const c = pick(CRITTERS);
+    S.objs.push({ kind: 'critter', id: ++S.id, lane, out: false, x: lane - (S.L - 1) / 2 + rand(-.25, .25), d: IN_D(),
+      v: speed() * .55, c, h: c.h, alpha: 0, wob: Math.random() * 6 });
+  }
+
+  function startWanted() {
+    const real = genPlate(); real.e = false;
+    S.wanted = { plate: real, state: 'active', t: 0 };
+    const items = [{ plate: real, wanted: true }, { plate: decoy(real) }, { plate: decoy(real) }];
+    if (S.t > 90) items.push({ plate: decoy(real) });
+    items.sort(() => Math.random() - .5);
+    let at = S.t + rand(2.5, 4);
+    S.plan = items.map(it => { const p = { ...it, at }; at += rand(1.1, 2.2); return p; });
+    renderWanted();
+    banner('🚨 Fahndung! Kennzeichen merken!', false);
+    sfx.siren();
+  }
+
+  function resolveWanted(hit) {
+    if (!S.wanted || S.wanted.state !== 'active') return;
+    S.wanted.state = hit ? 'hit' : 'lost';
+    S.wanted.t = 2.6;
+    renderWanted();
+  }
+
+  // =========================================================
+  //  Treffer-Logik
+  // =========================================================
+  function onShoot(mx, my) {
+    if (!S.running || S.paused) return;
+    if (S.cool > 0) { addFx(mx, my - 10, 'Kamera lädt …', '#9fb3c8', 11); return; }
+    S.cool = .28; S.flash = .12; S.shots++;
+    shutter();
+
+    // UFO zuerst
+    if (S.ufo && Math.hypot(mx - S.ufo.x, my - S.ufo.y) < S.ufo.r * 1.1) {
+      S.ufoHits++; const pts = 300 * mult(); S.score += pts; S.combo++; bumpCombo();
+      addFx(S.ufo.x, S.ufo.y - 20, `👽 +${pts}`, '#b7ff6a', 18);
+      addLog({ txt: 'ZZ-Ж 42', note: 'Außerirdisch · 42 %', cls: 'wanted', conf: 'extraterrestrisch' });
+      banner('🛸 UFO-Kennzeichen erfasst!', true); sfx.ufo();
+      S.ufo = null; return;
+    }
+
+    const sorted = S.objs.filter(o => o.alpha > .3).sort((a, b) => a.d - b.d);
+    for (const o of sorted) {
+      if (o.kind === 'critter') {
+        const b = o.box; if (!b) continue;
+        if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+          S.critterShots++; S.score = Math.max(0, S.score - 50); resetCombo();
+          addFx(mx, my - 14, '−50 Fehlauslösung', '#ff6b78', 14);
+          addFx(mx, my + 8, o.c.msg, '#ffd2d6', 12, 2);
+          if (o.c.e === '🐄') sfx.moo(); else sfx.bad();
+          return;
+        }
+        continue;
+      }
+      const pr = o.pr, br = o.br; if (!pr) continue;
+      const padX = pr.w * .12, padY = pr.h * .35;
+      const onPlate = mx >= pr.x - padX && mx <= pr.x + pr.w + padX && my >= pr.y - padY && my <= pr.y + pr.h + padY;
+      const onBody = mx >= br.x && mx <= br.x + br.w && my >= br.y && my <= br.y + br.h;
+      if (!onPlate && !onBody) continue;
+      if (o.captured) { if (onPlate) addFx(mx, my - 12, 'Schon erfasst ✓', '#9fb3c8', 12); else continue; return; }
+      if (!onPlate) { resetCombo(); addFx(mx, my - 12, 'Nur Blech erfasst!', '#ff9aa4', 13); sfx.bad(); return; }
+
+      const f = fracOf(o.d), F = zf(), N = zn();
+      const str = plateStr(o.plate);
+      if (f < F || f > N) {
+        const far = f < F;
+        resetCombo(); sfx.bad();
+        const gtxt = garble(str, far ? .75 : .55);
+        addFx(mx, my - 12, far ? 'Zu weit weg – unscharf! 🔍' : 'Zu nah – Bewegungsunschärfe!', '#ff9aa4', 13);
+        addLog({ txt: gtxt, note: far ? 'zu weit · unleserlich' : 'zu nah · verwischt', cls: 'bad', conf: Math.round(rand(18, 44)) + ' %' });
+        return;
+      }
+      if (o.dirt > 0) {
+        o.dirt--; S.dirtyCleaned++;
+        addFx(mx, my - 12, '🧽 Verschmutzt! Nochmal!', '#ffd166', 13);
+        addLog({ txt: garble(str, .5), note: 'verschmutzt · Wiederholung', cls: 'bad', conf: Math.round(rand(45, 62)) + ' %' });
+        tone(500, .06, 'triangle', .04);
+        return;
+      }
+      // Erfolgreich!
+      const mid = (F + N) / 2, q = 1 - Math.abs(f - mid) / ((N - F) / 2);
+      const cxp = pr.x + pr.w / 2, cyp = pr.y + pr.h / 2;
+      const pq = clamp(1 - Math.hypot((mx - cxp) / (pr.w / 2), (my - cyp) / (pr.h * 1.2)), 0, 1);
+      const conf = Math.min(99.9, 80 + 11 * q + 8 * pq + rand(0, 1.5));
+      S.combo++; bumpCombo();
+      let pts = Math.round((60 + 40 * q + 30 * pq) * mult());
+      o.captured = true; S.caught++;
+      S.snaps.push({ x: pr.x, y: pr.y, w: pr.w, h: pr.h, t: .6 });
+      let label = q > .75 && pq > .5 ? 'Perfekt!' : q > .4 ? 'Gut!' : 'Okay';
+      if (o.plate.e) { pts += 20; label += ' ⚡E'; }
+      if (o.wanted) {
+        const bonus = Math.round(500 * mult()); pts += bonus;
+        S.wantedHits++; resolveWanted(true);
+        banner('🚨 Fahndungstreffer! +' + bonus, true); sfx.jackpot();
+      } else sfx.ok();
+      S.score += pts;
+      addFx(cxp, pr.y - 8, `+${pts} ${label}`, o.wanted ? '#ffd166' : '#5df0b5', o.wanted ? 18 : 15);
+      addLog({ txt: str, note: o.wanted ? 'GESUCHT · Treffer!' : o.vt.n, cls: o.wanted ? 'wanted' : '', conf: conf.toFixed(1).replace('.', ',') + ' %' });
+      return;
+    }
+    resetCombo();
+    addFx(mx, my - 12, 'Leeres Bild – nur Asphalt', '#9fb3c8', 12);
+  }
+
+  const mult = () => 1 + Math.min(S.combo, 8) * .25;
+  function bumpCombo() {
+    S.bestCombo = Math.max(S.bestCombo, S.combo);
+    if (S.combo > 0 && S.combo % 5 === 0) { addFx(W / 2, hY + 30, `🔥 ${S.combo}er-Combo!`, '#ffb020', 20, 1.4); }
+  }
+  function resetCombo() { S.combo = 0; }
+
+  function loseLife(x, y, text) {
+    S.lives--; resetCombo(); sfx.miss();
+    addFx(x, y, text, '#ff6b78', 15, 1.4);
+    if (S.lives <= 0) end();
+  }
+
+  function addFx(x, y, text, color, size = 14, life = 1.1) {
+    S.fx.push({ x: clamp(x, 70, W - 70), y, text, color, size, life, max: life });
+  }
+
+  // =========================================================
+  //  Spielschleife
+  // =========================================================
+  function step(dt) {
+    S.t += dt;
+    S.cool = Math.max(0, S.cool - dt);
+    S.flash = Math.max(0, S.flash - dt);
+    S.mouse.touchT = Math.max(0, S.mouse.touchT - dt);
+
+    // Spawns
+    S.spawnT -= dt;
+    if (S.spawnT <= 0) { spawnVehicle(); S.spawnT = spawnGap(); }
+    S.critterT -= dt;
+    if (S.critterT <= 0) { spawnCritter(); S.critterT = rand(9, 16); }
+    S.wantedT -= dt;
+    if (S.wantedT <= 0 && !S.plan.length && (!S.wanted || S.wanted.state !== 'active')) { startWanted(); S.wantedT = rand(24, 34); }
+    for (const p of S.plan) if (!p.done && S.t >= p.at) { if (spawnVehicle(p.plate, p.wanted)) p.done = true; else p.at += .3; }
+    S.plan = S.plan.filter(p => !p.done);
+    S.ufoT -= dt;
+    if (S.ufoT <= 0 && !S.ufo) {
+      const ltr = Math.random() < .5;
+      S.ufo = { x: ltr ? -40 : W + 40, y: hY * rand(.3, .6), vx: (ltr ? 1 : -1) * W / rand(4.5, 6), r: Math.max(18, W * .03), ph: 0 };
+      S.ufoT = rand(45, 75);
+    }
+    if (S.ufo) { S.ufo.x += S.ufo.vx * dt; S.ufo.ph += dt; if (S.ufo.x < -60 || S.ufo.x > W + 60) S.ufo = null; }
+
+    // Wetter
+    S.rainT -= dt;
+    if (S.rainT <= 0) { S.rainOn = !S.rainOn; S.rainT = S.rainOn ? rand(14, 22) : rand(30, 50); }
+    S.rain = clamp(S.rain + (S.rainOn ? dt : -dt) * .5, 0, 1);
+
+    // Bewegung
+    for (const o of S.objs) {
+      o.d += (o.out ? 1 : -1) * o.v * dt;
+      if (o.kind === 'critter') o.wob += dt * 8;
+    }
+    // Kolonnenverkehr: niemand fährt durch den Vordermann
+    for (let lane = 0; lane < S.L; lane++) {
+      const list = S.objs.filter(o => o.lane === lane);
+      if (lane === 0) { list.sort((a, b) => b.d - a.d); for (let i = 1; i < list.length; i++) if (list[i].d > list[i - 1].d / 1.22) list[i].d = list[i - 1].d / 1.22; }
+      else { list.sort((a, b) => a.d - b.d); for (let i = 1; i < list.length; i++) if (list[i].d < list[i - 1].d * 1.22) list[i].d = list[i - 1].d * 1.22; }
+    }
+    // Sichtbarkeit, verpasste Fahrzeuge, Entfernen
+    const F = zf(), N = zn();
+    for (const o of S.objs) {
+      const f = fracOf(o.d);
+      if (o.out) o.alpha = clamp((f - .15) / .1, 0, 1);
+      else o.alpha = Math.min(1, clamp((IN_D() - o.d) / (IN_D() * .12), 0, 1));
+      if (o.kind === 'car' && !o.captured && !o.missedFlag && S.running) {
+        const passed = o.out ? f < F - .04 : f > N + .06;
+        if (passed) {
+          o.missedFlag = true; S.missed++;
+          const px = o.pr ? o.pr.x + o.pr.w / 2 : W / 2, py = o.pr ? o.pr.y - 12 : H / 2;
+          if (o.wanted) { S.wantedMiss++; resolveWanted(false); banner('🚨 Gesuchtes Fahrzeug entkommen!', false); loseLife(px, py, '📵 Entkommen!'); if (S.running) loseLife(px, py + 20, ''); }
+          else loseLife(px, py, '📵 Unerfasst!');
+          if (!S.running) return;
+        }
+      }
+      o.gone = o.out ? f < .14 : f > 2.4;
+    }
+    S.objs = S.objs.filter(o => !o.gone);
+
+    // Fahndungsanzeige
+    if (S.wanted && S.wanted.state !== 'active') { S.wanted.t -= dt; if (S.wanted.t <= 0) { S.wanted = null; renderWanted(); } }
+
+    for (const f of S.fx) { f.life -= dt; f.y -= dt * 28; }
+    S.fx = S.fx.filter(f => f.life > 0);
+    for (const s of S.snaps) s.t -= dt;
+    S.snaps = S.snaps.filter(s => s.t > 0);
+
+    S.factT -= dt;
+    if (S.factT <= 0) { S.factT = 15; S.factI = (S.factI + 1) % FACTS.length; $('#fact').innerHTML = '💡 ' + FACTS[S.factI]; }
+    renderHud();
+  }
+
+  // Tageszeit: Start 14:00, 10 Spielminuten pro Sekunde
+  const clockMin = () => (14 * 60 + S.t * 10) % 1440;
+  function nightFactor() {
+    const h = clockMin() / 60;
+    if (h >= 18) return smooth((h - 18.3) / 2.2);
+    if (h < 4.5) return 1;
+    if (h < 7) return 1 - smooth((h - 4.5) / 2.2);
+    return 0;
+  }
+
+  // =========================================================
+  //  Zeichnen
+  // =========================================================
+  function draw() {
+    const n = S ? nightFactor() : 0;
+    // Himmel
+    const g = ctx.createLinearGradient(0, 0, 0, hY);
+    g.addColorStop(0, mixColor('#5fa8f0', '#070b22', n));
+    g.addColorStop(1, mixColor('#cfe6ff', n > .5 ? '#1c2452' : '#f0a06a', n < .5 ? n * 1.4 : n));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, hY + 1);
+    if (n > .3) { ctx.fillStyle = `rgba(255,255,255,${(n - .3) * .9})`; const r = mulberry(3); for (let i = 0; i < 60; i++) ctx.fillRect(r() * W, r() * hY * .8, 1.3, 1.3); }
+    // Skyline
+    for (const b of city) {
+      ctx.fillStyle = mixColor(b.c > .5 ? '#7a8aa3' : '#6a7891', '#0c1126', n);
+      ctx.fillRect(b.x, hY - b.h, b.w, b.h);
+      if (n > .35) { ctx.fillStyle = `rgba(255,214,120,${(n - .35) * 1.2})`; for (const [wx, wy] of b.win) ctx.fillRect(b.x + wx, hY - b.h + wy, 3, 3); }
+    }
+    // Boden
+    ctx.fillStyle = mixColor('#6b8f53', '#141d14', n); ctx.fillRect(0, hY, W, H - hY);
+    const yB = H + 4, L = S.L;
+    poly([[W / 2, hY], [Xat(-(L / 2 + .8), yB), yB], [Xat(L / 2 + .8, yB), yB]], mixColor('#a9a7a0', '#2a2b30', n));
+    poly([[W / 2, hY], [Xat(-L / 2, yB), yB], [Xat(L / 2, yB), yB]], mixColor('#41444c', '#16181d', n));
+    if (S.rain > 0) { ctx.fillStyle = `rgba(120,150,190,${S.rain * .12})`; poly([[W / 2, hY], [Xat(-L / 2, yB), yB], [Xat(L / 2, yB), yB]], ctx.fillStyle); }
+    const lineC = mixColor('#f2f2f2', '#8a8d95', n * .7);
+    // Bordsteine & Randlinien
+    strip(-L / 2 + .03, hY, yB, .012, lineC); strip(L / 2 - .03, hY, yB, .012, lineC);
+    // Mittellinie (Ein-/Ausfahrt) durchgezogen
+    strip(-L / 2 + 1, hY, yB, .016, mixColor('#ffd23f', '#8f7a2a', n * .6));
+    // Leitlinien zwischen den Einfahrtsspuren
+    for (let lane = 2; lane < L; lane++) {
+      const xu = -L / 2 + lane;
+      for (let d = 3.6; d < 120; d *= 1.2) strip(xu, Yd(d * 1.09), Yd(d), .012, lineC);
+    }
+    // Fahrtrichtungspfeile
+    ctx.fillStyle = mixColor('#e9e9e9', '#5d6068', n); ctx.globalAlpha = .55;
+    for (let lane = 0; lane < L; lane++) arrow(lane - (L - 1) / 2, D0 / .3, lane === 0);
+    ctx.globalAlpha = 1;
+    // Erfassungszone
+    const yF = hY + (H - hY) * zf(), yN = hY + (H - hY) * zn();
+    poly([[Xat(-L / 2, yF), yF], [Xat(L / 2, yF), yF], [Xat(L / 2, yN), yN], [Xat(-L / 2, yN), yN]], `rgba(51,214,255,${.08 + .04 * Math.sin(performance.now() / 300)})`);
+    ctx.strokeStyle = 'rgba(51,214,255,.7)'; ctx.lineWidth = 1.5; ctx.setLineDash([8, 6]);
+    for (const y of [yF, yN]) { ctx.beginPath(); ctx.moveTo(Xat(-L / 2, y), y); ctx.lineTo(Xat(L / 2, y), y); ctx.stroke(); }
+    ctx.setLineDash([]);
+    ctx.font = `700 ${Math.max(10, W * .013)}px system-ui,sans-serif`; ctx.fillStyle = 'rgba(51,214,255,.9)'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('▼ ERFASSUNGSZONE', Math.max(8, Xat(-L / 2 - .75, yF)), yF - 3);
+    // Laternen
+    const lamps = [];
+    for (const side of [-1, 1]) for (const d of [11, 17, 27, 45]) lamps.push({ xu: side * (L / 2 + .45), d, side });
+    lamps.sort((a, b) => b.d - a.d);
+    for (const l of lamps) drawLamp(l, n);
+
+    // Fahrzeuge & Tiere (fern → nah)
+    const objs = [...S.objs].sort((a, b) => b.d - a.d);
+    for (const o of objs) o.kind === 'car' ? drawCar(o, n) : drawCritter(o);
+
+    // Nacht: Abdunkeln + Lichter + retroreflektierende Kennzeichen
+    if (n > .02) {
+      ctx.fillStyle = `rgba(3,6,20,${.62 * n})`; ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const l of lamps) { const y = Yd(l.d), lp = LPd(l.d), x = Xat(l.xu - l.side * .22, y), top = y - 1.55 * lp;
+        glow(x, top + lp * .05, lp * .9, `rgba(255,200,120,${.22 * n})`); }
+      for (const o of objs) if (o.kind === 'car' && o.lights) for (const L2 of o.lights) glow(L2[0], L2[1], L2[2] * (o.out ? 1.2 : 3), o.out ? `rgba(255,40,40,${.35 * n * o.alpha})` : `rgba(255,240,200,${.35 * n * o.alpha})`);
+      ctx.globalCompositeOperation = 'source-over';
+      for (const o of objs) if (o.kind === 'car' && o.pr) drawPlate(o, .8 * n * o.alpha);
+    }
+    // Regen
+    if (S.rain > 0) {
+      ctx.strokeStyle = `rgba(190,210,240,${.35 * S.rain})`; ctx.lineWidth = 1; ctx.beginPath();
+      const cnt = Math.floor(140 * S.rain), now = performance.now() / 1000;
+      const r = mulberry(11);
+      for (let i = 0; i < cnt; i++) { const x = r() * W, sp = 500 + r() * 300, y = (r() * H + now * sp) % H; ctx.moveTo(x, y); ctx.lineTo(x - 3, y + 13); }
+      ctx.stroke();
+    }
+    // UFO
+    if (S.ufo) {
+      const u = S.ufo;
+      ctx.fillStyle = `rgba(160,255,120,${.18 + .1 * Math.sin(u.ph * 9)})`;
+      ctx.beginPath(); ctx.moveTo(u.x - u.r * .3, u.y + u.r * .3); ctx.lineTo(u.x + u.r * .3, u.y + u.r * .3); ctx.lineTo(u.x + u.r * 1.2, u.y + u.r * 3.2); ctx.lineTo(u.x - u.r * 1.2, u.y + u.r * 3.2); ctx.fill();
+      ctx.font = `${u.r * 2}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('🛸', u.x, u.y + Math.sin(u.ph * 4) * 4);
+      ctx.font = `800 ${Math.max(9, u.r * .42)}px monospace`; ctx.fillStyle = '#b7ff6a'; ctx.fillText('ZZ-Ж 42', u.x, u.y + u.r * 1.15);
+    }
+    // Erfassungsrahmen
+    for (const s of S.snaps) {
+      const k = 1 + (1 - s.t / .6) * .5, cx = s.x + s.w / 2, cy = s.y + s.h / 2;
+      ctx.strokeStyle = `rgba(93,240,181,${s.t / .6})`; ctx.lineWidth = 2.5;
+      ctx.strokeRect(cx - s.w * k / 2 - 4, cy - s.h * k / 2 - 4, s.w * k + 8, s.h * k + 8);
+    }
+    drawOSD(n);
+    // Effekttexte
+    for (const f of S.fx) {
+      ctx.globalAlpha = clamp(f.life / f.max * 1.6, 0, 1);
+      ctx.font = `800 ${f.size}px system-ui,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(f.text, f.x, f.y);
+      ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
+    }
+    ctx.globalAlpha = 1;
+    drawViewfinder();
+    if (S.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${S.flash * 3})`; ctx.fillRect(0, 0, W, H); }
+  }
+
+  function arrow(xu, d, up) {
+    const y = Yd(d), lp = LPd(d), x = Xat(xu, y), s = lp * .16;
+    ctx.beginPath();
+    if (up) { ctx.moveTo(x, y - s * 1.6); ctx.lineTo(x + s, y - s * .3); ctx.lineTo(x - s, y - s * .3); }
+    else { ctx.moveTo(x, y + s * .3); ctx.lineTo(x + s, y - s); ctx.lineTo(x - s, y - s); }
+    ctx.fill();
+  }
+
+  function glow(x, y, r, color) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+
+  function drawLamp(l, n) {
+    const y = Yd(l.d), lp = LPd(l.d), x = Xat(l.xu, y), top = y - 1.55 * lp;
+    ctx.strokeStyle = mixColor('#5b6270', '#22262e', n); ctx.lineWidth = Math.max(1.5, lp * .035);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, top); ctx.lineTo(x - l.side * lp * .22, top + lp * .02); ctx.stroke();
+    ctx.fillStyle = n > .2 ? '#ffe2a8' : '#cfd5dd';
+    rr(x - l.side * lp * .22 - lp * .07, top, lp * .14, lp * .05, 2); ctx.fill();
+  }
+
+  function drawCar(o, n) {
+    const y = Yd(o.d), lp = LPd(o.d), x = Xat(o.x, y);
+    const w = o.w * lp, h = o.h * lp;
+    ctx.save(); ctx.globalAlpha = o.alpha;
+    // Schatten
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(x, y, w * .58, lp * .045, 0, 0, Math.PI * 2); ctx.fill();
+    // Räder
+    ctx.fillStyle = '#121418';
+    rr(x - w * .47, y - h * .2, w * .17, h * .22, 3); ctx.fill();
+    rr(x + w * .30, y - h * .2, w * .17, h * .22, 3); ctx.fill();
+    const bt = y - h * .6, bb = y - h * .07;
+    const van = o.vt.n === 'Transporter';
+    // Kabine
+    const ct = y - h, ctw = w * (van ? .86 : .66), cbw = w * .92;
+    poly([[x - ctw / 2, ct + h * .02], [x + ctw / 2, ct + h * .02], [x + cbw / 2, bt + 1], [x - cbw / 2, bt + 1]], shade(o.color, -28));
+    rr(x - ctw / 2, ct, ctw, h * .08, h * .05); ctx.fillStyle = shade(o.color, -10); ctx.fill();
+    // Scheibe
+    const sg = ctx.createLinearGradient(x - w / 2, ct, x + w / 2, bt);
+    sg.addColorStop(0, '#2c3e55'); sg.addColorStop(.5, '#4d6a8a'); sg.addColorStop(1, '#1a2636');
+    poly([[x - ctw * .43, ct + h * .08], [x + ctw * .43, ct + h * .08], [x + cbw * .43, bt - h * .015], [x - cbw * .43, bt - h * .015]], sg);
+    // Karosserie
+    rr(x - w / 2, bt, w, bb - bt, h * .1); ctx.fillStyle = o.color; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(x - w / 2 + 2, bt + 1, w - 4, h * .05, h * .03); ctx.fill();
+    if (o.vt.police) { ctx.fillStyle = '#1d4ed8'; ctx.fillRect(x - w / 2, bt + (bb - bt) * .42, w, h * .045); ctx.fillStyle = '#10b981'; ctx.fillRect(x - w / 2, bt + (bb - bt) * .42 + h * .045, w, h * .03); }
+    // Lichter
+    const lw = w * .2, lh = h * .085, ly = bt + h * .07;
+    ctx.fillStyle = o.out ? '#ff2a3a' : (n > .2 ? '#fffbe6' : '#f3eccb');
+    rr(x - w * .46, ly, lw, lh, lh * .4); ctx.fill();
+    rr(x + w * .46 - lw, ly, lw, lh, lh * .4); ctx.fill();
+    o.lights = [[x - w * .36, ly + lh / 2, lw * .7], [x + w * .36, ly + lh / 2, lw * .7]];
+    if (!o.out) { ctx.fillStyle = '#20232a'; rr(x - w * .22, ly + lh * .15, w * .44, lh * .8, lh * .3); ctx.fill(); }
+    // Stoßstange
+    ctx.fillStyle = shade(o.color, -45); rr(x - w * .5, bb - h * .06, w, h * .08, h * .04); ctx.fill();
+    // Dachaufbauten
+    if (o.vt.police) { const on = Math.floor(performance.now() / 160) % 2;
+      ctx.fillStyle = on ? '#3b82f6' : '#1e3a8a'; rr(x - w * .2, ct - h * .07, w * .2, h * .07, 2); ctx.fill();
+      ctx.fillStyle = on ? '#1e3a8a' : '#3b82f6'; rr(x, ct - h * .07, w * .2, h * .07, 2); ctx.fill(); }
+    if (o.vt.taxi) { ctx.fillStyle = '#fff7d0'; rr(x - w * .14, ct - h * .08, w * .28, h * .08, 2); ctx.fill();
+      ctx.fillStyle = '#111'; ctx.font = `800 ${h * .06}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('TAXI', x, ct - h * .04); }
+    // Kennzeichen
+    const pw = PLATE_W * lp * (o.w / .6) ** .3, ph = pw * .23;
+    o.pr = { x: x - pw / 2, y: bb - h * .075 - ph * .55, w: pw, h: ph };
+    o.br = { x: x - w / 2, y: ct, w, h: y - ct };
+    ctx.restore();
+    drawPlate(o, o.alpha);
+    if (o.captured) {
+      ctx.save(); ctx.globalAlpha = o.alpha;
+      const r = Math.max(7, lp * .05);
+      ctx.fillStyle = '#36e0a0'; ctx.beginPath(); ctx.arc(x, ct - r - 3, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#05140d'; ctx.font = `900 ${r * 1.4}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('✓', x, ct - r - 2);
+      ctx.restore();
+    }
+  }
+
+  function drawPlate(o, alpha) {
+    const { x: px, y: py, w: pw, h: ph } = o.pr, pl = o.plate;
+    ctx.save(); ctx.globalAlpha = alpha;
+    rr(px, py, pw, ph, ph * .14); ctx.fillStyle = '#f5f5f0'; ctx.fill();
+    ctx.lineWidth = Math.max(1, ph * .07); ctx.strokeStyle = '#111'; ctx.stroke();
+    ctx.fillStyle = '#1a46c8'; rr(px + ph * .07, py + ph * .09, pw * .1, ph * .82, ph * .08); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = `800 ${ph * .3}px Arial,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('D', px + ph * .07 + pw * .05, py + ph * .8);
+    // Schrift
+    const f = ph * .74;
+    ctx.font = `800 ${f}px "Arial Narrow","Roboto Condensed",Arial,sans-serif`;
+    const t1 = pl.dist, t2 = `${pl.letters} ${pl.digits}${pl.e ? 'E' : ''}`;
+    const w1 = ctx.measureText(t1).width, w2 = ctx.measureText(t2).width, gap = f * .5, tot = w1 + gap + w2;
+    const left = px + pw * .135, avail = pw * .835 - ph * .1, sc = Math.min(1, avail / tot);
+    ctx.translate(left + avail / 2, py + ph * .54); ctx.scale(sc, 1);
+    ctx.fillStyle = '#111'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(t1, -tot / 2, 0);
+    ctx.fillStyle = '#2c8d3f'; ctx.beginPath(); ctx.arc(-tot / 2 + w1 + gap / 2, -f * .17, f * .12, 0, 7); ctx.fill();
+    ctx.fillStyle = '#c99a00'; ctx.beginPath(); ctx.arc(-tot / 2 + w1 + gap / 2, f * .17, f * .12, 0, 7); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.fillText(t2, -tot / 2 + w1 + gap, 0);
+    ctx.restore();
+    if (o.dirt > 0) {
+      ctx.save(); ctx.globalAlpha = alpha * .88; rr(px, py, pw, ph, ph * .14); ctx.clip();
+      const r = mulberry(o.seed);
+      for (let i = 0; i < 9; i++) { ctx.fillStyle = i % 3 ? '#6b4a2b' : '#8a6a3f'; ctx.beginPath(); ctx.ellipse(px + r() * pw, py + r() * ph, ph * (.2 + r() * .35), ph * (.15 + r() * .25), r() * 3, 0, 7); ctx.fill(); }
+      ctx.restore();
+    }
+  }
+
+  function drawCritter(o) {
+    const y = Yd(o.d), lp = LPd(o.d), x = Xat(o.x, y), s = o.h * lp * 1.25;
+    ctx.save(); ctx.globalAlpha = o.alpha;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x, y, s * .4, lp * .03, 0, 0, 7); ctx.fill();
+    ctx.font = `${s}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(o.c.e, x, y + s * .08 + Math.sin(o.wob) * s * .03);
+    ctx.restore();
+    o.box = { x: x - s * .5, y: y - s * .95, w: s, h: s };
+  }
+
+  function drawOSD(n) {
+    const fs = Math.max(10, Math.min(13, W * .014));
+    ctx.font = `700 ${fs}px "Courier New",monospace`; ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, fs + 14);
+    const blink = Math.floor(performance.now() / 500) % 2;
+    ctx.fillStyle = blink ? '#ff3b4f' : 'rgba(255,59,79,.3)';
+    ctx.beginPath(); ctx.arc(14, 7 + fs / 2, 4.5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#e6f6ff'; ctx.textAlign = 'left';
+    ctx.fillText(`REC  CAM-01 · ANPR${W > 520 ? ' · EINFAHRT P1' : ''}`, 24, 7);
+    const m = clockMin(), hh = String(Math.floor(m / 60)).padStart(2, '0'), mm = String(Math.floor(m % 60)).padStart(2, '0');
+    const ss = String(Math.floor((S.t * 600) % 60)).padStart(2, '0');
+    ctx.textAlign = 'right';
+    ctx.fillText(`${n > .5 ? 'IR ' : ''}${S.rain > .3 ? '🌧 ' : ''}${hh}:${mm}:${ss}`, W - 10, 7);
+    // Bildecken
+    ctx.strokeStyle = 'rgba(230,246,255,.55)'; ctx.lineWidth = 2;
+    const c = 18, m2 = 10, top = fs + 22;
+    for (const [x, y, dx, dy] of [[m2, top, 1, 1], [W - m2, top, -1, 1], [m2, H - m2, 1, -1], [W - m2, H - m2, -1, -1]]) {
+      ctx.beginPath(); ctx.moveTo(x, y + dy * c); ctx.lineTo(x, y); ctx.lineTo(x + dx * c, y); ctx.stroke();
+    }
+  }
+
+  function drawViewfinder() {
+    const m = S.mouse;
+    if (!m.in && m.touchT <= 0) return;
+    const w = Math.max(70, W * .09), h = w * .5, x = m.x, y = m.y;
+    const col = S.cool > 0 ? 'rgba(255,90,100,.9)' : 'rgba(93,240,181,.95)';
+    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    const c = w * .22;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const cx = x + sx * w / 2, cy = y + sy * h / 2;
+      ctx.beginPath(); ctx.moveTo(cx - sx * c, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy - sy * c * .7); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(x - 6, y); ctx.lineTo(x + 6, y); ctx.moveTo(x, y - 6); ctx.lineTo(x, y + 6); ctx.stroke();
+    if (S.cool > 0) { ctx.beginPath(); ctx.arc(x, y, 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - S.cool / .28)); ctx.stroke(); }
+    ctx.font = '700 10px "Courier New",monospace'; ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('AF ●', x - w / 2, y - h / 2 - 3);
+  }
+
+  // =========================================================
+  //  HTML-Oberfläche
+  // =========================================================
+  function renderHud() {
+    $('#score').textContent = S.score.toLocaleString('de-DE');
+    const cb = $('#combo'); cb.textContent = '×' + mult().toFixed(2).replace(/\.?0+$/, '').replace('.', ','); cb.classList.toggle('hot', S.combo >= 4);
+    $('#caught').textContent = S.caught;
+    const tot = S.caught + S.missed;
+    $('#rate').textContent = tot ? Math.round(S.caught / tot * 100) + ' %' : '–';
+    const lv = Array.from({ length: MAX_LIVES }, (_, i) => `<i class="${i < S.lives ? '' : 'off'}">📷</i>`).join('');
+    if ($('#lives').dataset.v !== String(S.lives)) { $('#lives').innerHTML = lv; $('#lives').dataset.v = S.lives; }
+  }
+
+  function renderWanted() {
+    const box = $('#wanted'), w = S && S.wanted;
+    box.className = !w ? 'idle' : w.state === 'active' ? 'active' : w.state === 'hit' ? 'hit' : 'idle';
+    if (!w) { $('#wlabel').innerHTML = 'Fahndungsliste<small>Aktuell keine Fahndung – erfasst alle Fahrzeuge.</small>'; $('#wplate').innerHTML = ''; return; }
+    const txt = w.state === 'active' ? 'Gesuchtes Fahrzeug<small>Gleich kommt es an – aber Vorsicht vor ähnlichen Kennzeichen!</small>'
+      : w.state === 'hit' ? 'Gefasst! ✅<small>Fahndungstreffer gemeldet.</small>' : 'Entkommen ❌<small>Das gesuchte Fahrzeug ist durchgerutscht.</small>';
+    $('#wlabel').innerHTML = txt;
+    $('#wplate').innerHTML = plateHTML(plateStr(w.plate));
+  }
+
+  let logN = 0;
+  function addLog({ txt, note, cls, conf }) {
+    const log = $('#log');
+    if (!logN) log.innerHTML = '';
+    logN++;
+    const el = document.createElement('div');
+    el.className = 'shot ' + (cls || '');
+    const m = clockMin(), time = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
+    el.innerHTML = `${plateHTML('', 'sm' + (cls === 'bad' ? ' bad' : ''))}<div class="meta"><span>${note} · ${time}</span><b>${conf}</b></div>`;
+    log.prepend(el);
+    while (log.children.length > 8) log.lastChild.remove();
+    $('#logcount').textContent = `${logN} Aufnahme${logN === 1 ? '' : 'n'}`;
+    // OCR-"Rechnen": Zeichen flackern, bevor das Ergebnis steht
+    const t = el.querySelector('.txt'), chars = 'ABCDEFGHKLMNPRSTUVWXZ0123456789';
+    let k = 0;
+    const iv = setInterval(() => {
+      k++;
+      const shown = [...txt].map((ch, i) => (ch === ' ' || ch === '-') ? ch : (i < k * 1.4 ? ch : pick([...chars]))).join('');
+      t.innerHTML = shown.replace('-', '&nbsp;');
+      if (k > txt.length / 1.4 + 1) { clearInterval(iv); t.innerHTML = txt.replace('-', '&nbsp;'); }
+    }, 35);
+  }
+
+  let bannerT = null;
+  function banner(text, good) {
+    const b = $('#banner'); b.textContent = text; b.classList.toggle('good', !!good); b.classList.add('show');
+    clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.remove('show'), 2000);
+  }
+
+  // =========================================================
+  //  Start / Ende
+  // =========================================================
+  const readBest = () => { try { return +localStorage.getItem('kennzeichenjagd-best') || 0; } catch (e) { return 0; } };
+  const writeBest = v => { try { localStorage.setItem('kennzeichenjagd-best', v); } catch (e) {} };
+
+  function showIntro() {
+    const best = readBest();
+    $('#card').innerHTML = `
+      <h2>📸 Kennzeichen-Jagd</h2>
+      <p>Du bist <b>CAM-01</b>, die Kennzeichenkamera an der Einfahrt zum Parkhaus. Jedes Fahrzeug, das rein- oder rausfährt,
+      muss erfasst werden – sonst gibt's eine Datenlücke. Ziel ist ein sauberes OCR-Ergebnis mit hoher Konfidenz.</p>
+      <div class="legend">
+        <div><b>🎯 Auslösen:</b> aufs <b>Kennzeichen</b> klicken bzw. tippen, während das Auto in der blauen <b>Erfassungszone</b> ist.</div>
+        <div><b>🔍 Zu früh oder zu spät:</b> unleserlich oder verwischt, und die Combo ist weg.</div>
+        <div><b>🚨 Fahndung:</b> Kennzeichen merken und das richtige Auto erwischen. Es gibt Doppelgänger mit fast gleichem Kennzeichen!</div>
+        <div><b>🧽 Verschmutzt:</b> braucht zwei Aufnahmen.</div>
+        <div><b>🐄🦆🛒 Kein Kennzeichen:</b> nicht fotografieren! Fehlauslösung kostet Punkte.</div>
+        <div><b>🛸 Und falls was Seltsames am Himmel auftaucht …</b> draufhalten!</div>
+      </div>
+      <p>Es wird schneller, Abend, Nacht und Regen kommen dazu. Nach 5 Datenlücken 📷 ist Feierabend. Treffer hintereinander erhöhen den Multiplikator (bis ×3).</p>
+      ${best ? `<p>🏆 Dein Rekord: <b>${best.toLocaleString('de-DE')} Punkte</b></p>` : ''}
+      <button class="go" id="goBtn">Kamera einschalten ▶</button>`;
+    $('#overlay').classList.remove('hidden');
+    $('#goBtn').onclick = start;
+  }
+
+  function start() {
+    ac();
+    S = newState();
+    resize();
+    logN = 0;
+    $('#log').innerHTML = '<div class="empty-log">Noch keine Aufnahmen.</div>';
+    $('#logcount').textContent = '';
+    $('#fact').innerHTML = '💡 ' + FACTS[S.factI]; S.factT = 15;
+    renderWanted(); renderHud();
+    $('#overlay').classList.add('hidden');
+    S.running = true;
+    tone(440, .08); tone(660, .08, 'sine', .05, .09); tone(880, .12, 'sine', .05, .18);
+  }
+
+  function end() {
+    S.running = false;
+    const best = readBest(), record = S.score > best;
+    if (record) writeBest(S.score);
+    const tot = S.caught + S.missed, rate = tot ? Math.round(S.caught / tot * 100) : 0;
+    const rank = S.score < 3000 ? 'Praktikant am Schlagbaum 🚧' : S.score < 10000 ? 'Kennzeichen-Kommissar 🕵️' : S.score < 25000 ? 'OCR-Orakel 🔮' : 'Adlerauge 🦅';
+    const m = clockMin(), time = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
+    $('#card').innerHTML = `
+      <h2>Kamera offline 📴</h2>
+      <p class="rank">Dein Titel: ${rank}</p>
+      <p>Fünf Datenlücken – die Schicht endet um ${time} Uhr. Deine Bilanz:</p>
+      <div class="results">
+        <div><small>Punkte</small><b>${S.score.toLocaleString('de-DE')}</b>${record ? ' 🏆 Rekord!' : ''}</div>
+        <div><small>Erfasste Fahrzeuge</small><b>${S.caught}</b></div>
+        <div><small>Lesequote</small><b>${rate} %</b></div>
+        <div><small>Beste Combo</small><b>${S.bestCombo}</b></div>
+        <div><small>Fahndungstreffer 🚨</small><b>${S.wantedHits}</b> / ${S.wantedHits + S.wantedMiss}</div>
+        <div><small>Fehlauslösungen 🐄</small><b>${S.critterShots}</b></div>
+        <div><small>Auslösungen gesamt</small><b>${S.shots}</b></div>
+        <div><small>UFOs 🛸</small><b>${S.ufoHits}</b></div>
+      </div>
+      <button class="go" id="goBtn">Neue Schicht 🔁</button>`;
+    $('#overlay').classList.remove('hidden');
+    $('#goBtn').onclick = start;
+    [500, 380, 260].forEach((f, i) => tone(f, .2, 'sawtooth', .035, i * .16));
+  }
+
+  // =========================================================
+  //  Eingaben
+  // =========================================================
+  function pos(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  cv.addEventListener('pointermove', e => { if (!S) return; const p = pos(e); S.mouse.x = p.x; S.mouse.y = p.y; S.mouse.in = e.pointerType === 'mouse'; });
+  cv.addEventListener('pointerleave', () => { if (S) S.mouse.in = false; });
+  cv.addEventListener('pointerdown', e => {
+    if (!S) return;
+    e.preventDefault();
+    const p = pos(e); S.mouse.x = p.x; S.mouse.y = p.y;
+    if (e.pointerType !== 'mouse') S.mouse.touchT = .5;
+    onShoot(p.x, p.y);
+  });
+  $('#muteBtn').onclick = () => { muted = !muted; $('#muteBtn').textContent = muted ? '🔇' : '🔊'; };
+  function setPause(v) {
+    if (!S || !S.running) return;
+    S.paused = v;
+    if (v) banner('⏸ Pause – P drücken', true);
+  }
+  document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p' && S && S.running) setPause(!S.paused); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) setPause(true); });
+  window.addEventListener('resize', () => { if (S) { const keep = S.L; resize(); S.L = keep; } });
+
+  let last = 0;
+  function loop(ts) {
+    const dt = Math.min(.05, (ts - last) / 1000 || 0); last = ts;
+    if (S.running && !S.paused) step(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // Los geht's: Demo-Verkehr im Hintergrund, Intro darüber
+  S = newState();
+  resize();
+  renderWanted(); renderHud();
+  $('#fact').innerHTML = '💡 ' + FACTS[S.factI];
+  for (let i = 0; i < 4; i++) { spawnVehicle(); S.objs.forEach(o => { if (!o.out) o.d -= 9; o.alpha = 1; }); }
+  showIntro();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
