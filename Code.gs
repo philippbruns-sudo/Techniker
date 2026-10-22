@@ -10,6 +10,14 @@ function doGet(e) {
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   } 
+
+  // Wenn in der URL "?page=wizard" steht, lade den Setup-Assistenten für neue Sites
+  if (e && e.parameter && e.parameter.page === 'wizard') {
+    return HtmlService.createHtmlOutputFromFile('Wizard')
+        .setTitle('Smart Parking - Neue Site einrichten')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
   
   // Standardmäßig (ohne Parameter) die Techniker-App (Uploader) laden
   return HtmlService.createHtmlOutputFromFile('Index')
@@ -179,6 +187,57 @@ function saveNewProject(data) {
     return {
       status: 'success',
       message: 'Projekt erfolgreich angelegt!'
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      message: 'Fehler beim Speichern: ' + error.toString()
+    };
+  }
+}
+
+
+// ==========================================
+// 4. FUNKTIONEN FÜR DEN SETUP-ASSISTENTEN (WIZARD)
+// ==========================================
+
+// Speichert das Protokoll einer Site-Einrichtung im Tabellenblatt "Site-Onboarding"
+function saveSiteOnboarding(data) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Site-Onboarding');
+    
+    // Tabellenblatt beim ersten Aufruf inkl. Kopfzeile anlegen
+    if (!sheet) {
+      sheet = ss.insertSheet('Site-Onboarding');
+      sheet.appendRow([
+        'Zeitstempel', 'Bearbeiter', 'Site-Name', 'Site-ID', 'Adresse', 'Kunde / Betreiber',
+        'Stellplätze', 'SmartCloud', 'Handover', 'KBA (Königs Inkasso)', 'EasyPark',
+        'EasyPark eingerichtet', 'EasyPark Excel', 'E-Mail EasyPark'
+      ]);
+      sheet.setFrozenRows(1);
+    }
+    
+    sheet.appendRow([
+      new Date(),
+      Session.getActiveUser().getEmail(),
+      data.name,
+      data.id,
+      data.adresse,
+      data.kunde,
+      data.stellplaetze,
+      data.smartcloud,
+      data.handover,
+      data.kba,
+      data.easypark,
+      data.epSetup,
+      data.epExcel,
+      data.epMail
+    ]);
+    
+    return {
+      status: 'success',
+      message: 'Protokoll gespeichert!'
     };
   } catch (error) {
     return {
