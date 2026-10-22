@@ -91,6 +91,23 @@
   .results b{font-size:20px}
   .rank{font-size:15px;color:var(--cyan);font-weight:700}
 
+  .board{margin:14px 0 4px}
+  .board h3{margin:0 0 6px;font-size:15px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .board h3 small{color:var(--muted);font-weight:500;font-size:11px}
+  .board table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+  .board td{padding:6px 8px;border-top:1px solid #263049}
+  .board td:first-child{width:34px;text-align:center}
+  .board td.num{text-align:right;white-space:nowrap}
+  .board td.dim{color:var(--muted);font-size:12px}
+  .board tr.me td{background:rgba(54,224,160,.12);color:#c9ffe9;font-weight:700}
+  .board .none{color:var(--muted);font-size:13px;padding:6px 0}
+  .submit{display:flex;gap:8px;margin:12px 0 4px}
+  .submit input{flex:1;min-width:0;background:#0d1322;border:2px solid #2a3552;border-radius:10px;color:var(--text);font:inherit;font-size:16px;padding:10px 12px}
+  .submit input:focus{outline:none;border-color:var(--cyan)}
+  .submit button{background:var(--cyan);color:#05121c;font-weight:800;border-radius:10px;padding:0 14px}
+  .submit button:disabled{opacity:.5;cursor:default}
+  .submsg{font-size:13px;color:var(--muted);min-height:18px}
+  .submsg.ok{color:var(--accent)} .submsg.err{color:var(--bad)}
   @keyframes siren{from{filter:hue-rotate(0)}to{filter:hue-rotate(200deg);transform:scale(1.15)}}
   @keyframes slidein{from{opacity:0;transform:translateY(-6px)}}
 
@@ -99,7 +116,8 @@
     .stat{min-width:0;padding:4px 8px}
     .stat b{font-size:14px}
     .plate{height:30px} .plate .txt{font-size:19px;line-height:26px}
-    .legend,.results{grid-template-columns:1fr}
+    .legend{grid-template-columns:1fr}
+    .results div{padding:7px 9px} .results b{font-size:17px} .results small{font-size:10px}
     #banner{font-size:19px;padding:10px 16px}
     #log{grid-template-columns:1fr 1fr}
     #log .shot:nth-child(n+5){display:none}
@@ -891,6 +909,71 @@
   }
 
   // =========================================================
+  //  Rangliste
+  //  Eingebettet im Orgatool spricht das Spiel per postMessage mit der
+  //  Host-Seite (die google.script.run aufruft). Läuft die Datei allein,
+  //  gibt es eine lokale Rangliste im Browser.
+  // =========================================================
+  const embedded = window.parent !== window;
+  let reqId = 0;
+  const pending = {};
+  window.addEventListener('message', e => {
+    const m = e.data;
+    if (!m || m.source !== 'kj-host' || !pending[m.id]) return;
+    const p = pending[m.id]; delete pending[m.id];
+    m.ok ? p.res(m.data) : p.rej(m.data);
+  });
+  function hostCall(type, payload) {
+    return new Promise((res, rej) => {
+      if (!embedded) { rej('standalone'); return; }
+      const id = ++reqId;
+      pending[id] = { res, rej };
+      parent.postMessage({ source: 'kj', type, id, payload }, '*');
+      setTimeout(() => { if (pending[id]) { delete pending[id]; rej('timeout'); } }, 15000);
+    });
+  }
+  const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const cleanName = n => String(n || '').replace(/[<>]/g, '').replace(/^[=+\-@\s]+/, '').trim().slice(0, 20);
+  const readName = () => { try { return localStorage.getItem('kennzeichenjagd-name') || ''; } catch (e) { return ''; } };
+  const writeName = v => { try { localStorage.setItem('kennzeichenjagd-name', v); } catch (e) {} };
+
+  function localBoard() {
+    try { return JSON.parse(localStorage.getItem('kennzeichenjagd-board') || '[]'); } catch (e) { return []; }
+  }
+  function localSubmit(entry) {
+    const list = localBoard();
+    const i = list.findIndex(x => x.name.toLowerCase() === entry.name.toLowerCase());
+    if (i < 0) list.push(entry); else if (entry.score > list[i].score) list[i] = entry;
+    list.sort((a, b) => b.score - a.score);
+    try { localStorage.setItem('kennzeichenjagd-board', JSON.stringify(list.slice(0, 50))); } catch (e) {}
+    return { list: list.slice(0, 10), rank: list.findIndex(x => x.name.toLowerCase() === entry.name.toLowerCase()) + 1, total: list.length };
+  }
+  let boardSource = embedded ? 'team' : 'local';
+  function loadBoard() {
+    return hostCall('leaderboard').then(list => { boardSource = 'team'; return list; })
+      .catch(() => { boardSource = 'local'; return localBoard().slice(0, 10); });
+  }
+  function submitBoard(entry) {
+    return hostCall('submit', entry).then(r => { boardSource = 'team'; return r; })
+      .catch(() => { boardSource = 'local'; return localSubmit(entry); });
+  }
+  function boardHTML(list, me) {
+    const title = boardSource === 'team' ? '🏆 Team-Rangliste' : '🏆 Rangliste';
+    const sub = boardSource === 'team' ? 'Bestwert pro Person' : 'nur auf diesem Gerät';
+    if (!list || !list.length) return `<h3>${title}<small>${sub}</small></h3><div class="none">Noch keine Einträge – sei die erste Person!</div>`;
+    const medal = i => ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
+    return `<h3>${title}<small>${sub}</small></h3><table>${list.map((r, i) => `
+      <tr class="${me && r.name.toLowerCase() === me.toLowerCase() ? 'me' : ''}">
+        <td>${medal(i)}</td><td>${esc(r.name)}</td>
+        <td class="num dim">${(+r.caught || 0)} 🚗</td><td class="num">${(+r.score || 0).toLocaleString('de-DE')}</td>
+      </tr>`).join('')}</table>`;
+  }
+  function showBoard(el, me) {
+    el.innerHTML = '<div class="none">Rangliste wird geladen …</div>';
+    loadBoard().then(list => { el.innerHTML = boardHTML(list, me); });
+  }
+
+  // =========================================================
   //  Start / Ende
   // =========================================================
   const readBest = () => { try { return +localStorage.getItem('kennzeichenjagd-best') || 0; } catch (e) { return 0; } };
@@ -911,10 +994,12 @@
         <div><b>🛸 Und falls was Seltsames am Himmel auftaucht …</b> draufhalten!</div>
       </div>
       <p>Es wird schneller, Abend, Nacht und Regen kommen dazu. Nach 5 Datenlücken 📷 ist Feierabend. Treffer hintereinander erhöhen den Multiplikator (bis ×3).</p>
-      ${best ? `<p>🏆 Dein Rekord: <b>${best.toLocaleString('de-DE')} Punkte</b></p>` : ''}
-      <button class="go" id="goBtn">Kamera einschalten ▶</button>`;
+      ${best ? `<p>🎯 Dein persönlicher Rekord: <b>${best.toLocaleString('de-DE')} Punkte</b></p>` : ''}
+      <button class="go" id="goBtn">Kamera einschalten ▶</button>
+      <div class="board" id="introBoard"></div>`;
     $('#overlay').classList.remove('hidden');
     $('#goBtn').onclick = start;
+    showBoard($('#introBoard'), readName());
   }
 
   function start() {
@@ -952,9 +1037,35 @@
         <div><small>Auslösungen gesamt</small><b>${S.shots}</b></div>
         <div><small>UFOs 🛸</small><b>${S.ufoHits}</b></div>
       </div>
+      ${S.score > 0 ? `<div class="submit"><input id="nameIn" maxlength="20" placeholder="Dein Name" autocomplete="nickname"><button id="sendBtn">Eintragen 🏆</button></div>
+      <div class="submsg" id="submsg">Trag dich in die Rangliste ein!</div>` : ''}
+      <div class="board" id="endBoard"></div>
       <button class="go" id="goBtn">Neue Schicht 🔁</button>`;
     $('#overlay').classList.remove('hidden');
     $('#goBtn').onclick = start;
+    showBoard($('#endBoard'), readName());
+    const nameIn = $('#nameIn');
+    if (nameIn) {
+      nameIn.value = readName();
+      const entry = { score: S.score, caught: S.caught, rate, combo: S.bestCombo };
+      const send = () => {
+        const name = cleanName(nameIn.value);
+        const msg = $('#submsg');
+        if (!name) { msg.textContent = 'Bitte gib einen Namen ein.'; msg.className = 'submsg err'; nameIn.focus(); return; }
+        writeName(name);
+        $('#sendBtn').disabled = nameIn.disabled = true;
+        msg.textContent = 'Wird eingetragen …'; msg.className = 'submsg';
+        submitBoard({ ...entry, name }).then(r => {
+          if (!r || !r.list) { msg.textContent = 'Eintragen fehlgeschlagen.'; msg.className = 'submsg err'; $('#sendBtn').disabled = nameIn.disabled = false; return; }
+          $('#endBoard').innerHTML = boardHTML(r.list, name);
+          msg.textContent = r.rank ? `Eingetragen! Du bist auf Platz ${r.rank} von ${r.total}.` : 'Eingetragen!';
+          msg.className = 'submsg ok';
+          $('#sendBtn').textContent = '✓';
+        });
+      };
+      $('#sendBtn').onclick = send;
+      nameIn.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+    }
     [500, 380, 260].forEach((f, i) => tone(f, .2, 'sawtooth', .035, i * .16));
   }
 
@@ -977,7 +1088,11 @@
     S.paused = v;
     if (v) banner('⏸ Pause – P drücken', true);
   }
-  document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p' && S && S.running) setPause(!S.paused); });
+  document.addEventListener('keydown', e => {
+    if (e.target && e.target.tagName === 'INPUT') return;
+    if (e.key.toLowerCase() === 'p' && S && S.running) setPause(!S.paused);
+    if (e.key === 'Escape' && embedded) parent.postMessage({ source: 'kj', type: 'close' }, '*');
+  });
   document.addEventListener('visibilitychange', () => { if (document.hidden) setPause(true); });
   window.addEventListener('resize', () => { if (S) { const keep = S.L; resize(); S.L = keep; } });
 
