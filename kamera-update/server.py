@@ -1,16 +1,3 @@
-#!/usr/bin/env python3
-"""
-Kamera-Update: aktualisiert ARVOO-Kameras im Netz per API und protokolliert jedes Update.
-
-Start:   python3 server.py            -> http://localhost:8080
-Demo:    python3 server.py --demo     (simulierte Kameras, eigener Datenordner)
-Tablet:  python3 server.py --host 0.0.0.0   (Oberfläche auch im Netzwerk erreichbar)
-
-Nur Python 3 nötig, keine Zusatzpakete. Daten liegen in ./data (bzw. ./data-demo):
-  cameras.json     Kameraliste mit letztem bekannten Stand
-  update_log.csv   Protokoll aller Updates (Semikolon, für Excel)
-"""
-
 import argparse
 import base64
 import csv
@@ -18,6 +5,7 @@ import json
 import os
 import random
 import re
+import shutil
 import threading
 import time
 import urllib.error
@@ -25,7 +13,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
@@ -35,26 +23,64 @@ DEFAULT_CONFIG = {
     'password': '',
     'port': 577,
     'api_prefix': '/api/v2',
-    'auth': 'basic',                 # basic | digest
-    'perform_update_body': 'auto',   # auto oder ein Format aus UPDATE_FORMATS (siehe README)
-    'parallel': 3,                   # wie viele Kameras gleichzeitig aktualisiert werden
+    'auth': 'basic',
+    'perform_update_body': 'json',
+    'parallel': 3,
     'timeout_s': 10,
     'update_timeout_min': 30,
 }
 
-LOG_FIELDS = ['zeit', 'ip', 'name', 'seriennummer', 'version_vorher', 'version_nachher', 'ergebnis', 'meldung']
+LOG_FIELDS = ['time', 'ip', 'name', 'serial', 'version_before', 'version_after', 'result', 'message']
+RESULT_SUCCESS = 'success'
+RESULT_CURRENT = 'up to date'
+RESULT_FAILED = 'failed'
+
+LEGACY_LOG_FIELDS = {
+    'zeit': 'time', 'seriennummer': 'serial', 'version_vorher': 'version_before',
+    'version_nachher': 'version_after', 'ergebnis': 'result', 'meldung': 'message',
+}
+LEGACY_RESULTS = {'erfolgreich': RESULT_SUCCESS, 'bereits aktuell': RESULT_CURRENT, 'fehlgeschlagen': RESULT_FAILED}
+
+MESSAGES = {
+    'checking': 'Checking ...',
+    'waiting': 'Waiting ...',
+    'waiting_slot': 'Waiting for a free slot ...',
+    'available': 'Update to {0} available',
+    'current': 'Up to date',
+    'starting_update': 'Starting update to {0} ...',
+    'detecting_format': 'Detecting update format: {0} ...',
+    'phase': '{0} ...',
+    'rebooting': 'Camera is restarting ...',
+    'updated': 'Updated to {0}',
+    'auth_failed': 'Login rejected (HTTP 401) - check password',
+    'unreachable': 'not reachable ({0})',
+    'http_error': '{0} {1}: HTTP {2}{3}{4}',
+    'bad_info': 'Unexpected response from /system/info',
+    'success_false': 'perform_update: camera reports success = false ({0})',
+    'all_formats_rejected': 'Camera rejects all formats for perform_update ({0})',
+    'update_error': 'Update failed (update_progress reports an error)',
+    'timeout': 'Timeout: version unchanged after {0} min',
+}
+
+UPDATE_FORMATS = ['json', 'json_string', 'form', 'query', 'json_raw', 'text', 'raw', 'none']
+PHASES = ('starting', 'downloading', 'installing', 'finished')
 
 DEMO = False
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 lock = threading.RLock()
-cameras = {}        # ip -> dict (gespeichert + Laufzeitstatus)
+cameras = {}
 config = {}
 update_slots = None
+check_slots = threading.BoundedSemaphore(10)
 
 
-# ==========================================
-# 1. KONFIGURATION & DATEIEN
-# ==========================================
+def render(key, args=()):
+    return MESSAGES.get(key, key).format(*args)
+
+
+def detail(key, *args):
+    return {'key': key, 'args': [str(a) for a in args]}
+
 
 def load_config():
     cfg = dict(DEFAULT_CONFIG)
@@ -100,8 +126,30 @@ def save_cameras():
 
 def new_camera(stored):
     c = {k: stored.get(k) for k in STORED_KEYS}
-    c.update({'status': 'idle', 'detail': '', 'progress': None, 'busy': False, 'online': None, 'update_raw': None})
+    c.update({'status': 'idle', 'detail': None, 'progress': None, 'busy': False, 'online': None, 'update_raw': None})
     return c
+
+
+def migrate_log():
+    path = log_file()
+    if not os.path.exists(path):
+        return
+    with open(path, newline='', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f, delimiter=';')
+        rows = list(reader)
+        fields = reader.fieldnames or []
+    if 'zeit' not in fields:
+        return
+    shutil.copyfile(path, path.replace('.csv', '_backup_de.csv'))
+    converted = []
+    for row in rows:
+        new = {LEGACY_LOG_FIELDS.get(k, k): v for k, v in row.items()}
+        new['result'] = LEGACY_RESULTS.get(new.get('result'), new.get('result'))
+        converted.append(new)
+    with open(path, 'w', newline='', encoding='utf-8-sig') as f:
+        w = csv.DictWriter(f, fieldnames=LOG_FIELDS, delimiter=';', extrasaction='ignore')
+        w.writeheader()
+        w.writerows(converted)
 
 
 def write_log(entry):
@@ -126,19 +174,15 @@ def now():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
-# ==========================================
-# 2. KAMERA-API
-# ==========================================
-
 class CameraError(Exception):
-    def __init__(self, message, code=None):
-        super().__init__(message)
+    def __init__(self, key, *args, code=None):
+        self.key = key
+        self.args_ = [str(a) for a in args]
         self.code = code
+        super().__init__(render(key, self.args_))
 
 
 class CameraClient:
-    """Spricht mit der ARVOO-API einer Kamera."""
-
     def __init__(self, ip, password=None):
         host = ip if ':' in ip else '%s:%s' % (ip, config['port'])
         self.base = 'http://%s%s' % (host, config['api_prefix'])
@@ -170,19 +214,18 @@ class CameraClient:
                 raw = res.read()
         except urllib.error.HTTPError as e:
             if e.code == 401:
-                raise CameraError('Anmeldung abgelehnt (HTTP 401) – Passwort prüfen')
-            # Begründung der Kamera mit anzeigen, z. B. welcher Wert fehlt
+                raise CameraError('auth_failed', code=401)
             try:
                 reason = e.read(400).decode('utf-8', 'replace').strip()
             except Exception:
                 reason = ''
-            sent = ' | gesendet: %s' % (data.decode('utf-8', 'replace')[:80] if data else '(nichts)') if method == 'POST' else ''
             if reason.lstrip().startswith('<'):
-                # HTML-Fehlerseite (Flask): nur den Text behalten
-                reason = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', re.sub(r'<title>.*?</title>', '', reason, flags=re.S))).strip()
-            raise CameraError('%s %s: HTTP %s%s%s' % (method, path, e.code, ' – Kamera: ' + reason if reason else '', sent), e.code)
+                reason = re.sub(r'<title>.*?</title>', '', reason, flags=re.S)
+                reason = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', reason)).strip()
+            sent = ' | sent: %s' % (data.decode('utf-8', 'replace')[:80] if data else '(nothing)') if method == 'POST' else ''
+            raise CameraError('http_error', method, path, e.code, ' - camera: ' + reason if reason else '', sent, code=e.code)
         except (urllib.error.URLError, OSError) as e:
-            raise CameraError('nicht erreichbar (%s)' % getattr(e, 'reason', e))
+            raise CameraError('unreachable', getattr(e, 'reason', e))
         try:
             return json.loads(raw)
         except ValueError:
@@ -190,8 +233,6 @@ class CameraClient:
 
 
 class FakeCamera:
-    """Simulierte Kamera für den Demo-Modus."""
-
     LATEST = '4.12.0'
     state = {}
 
@@ -202,8 +243,8 @@ class FakeCamera:
             FakeCamera.state[ip] = {
                 'version': random.choice(['4.9.7', '4.10.2', '4.11.0', FakeCamera.LATEST]),
                 'serial': 'RB-%d-%05d' % (random.randint(23, 25), random.randint(0, 99999)),
-                'offline': last % 10 == 9,      # IPs auf ...9 sind "offline"
-                'breaks': last % 10 == 7,       # IPs auf ...7 schlagen beim Update fehl
+                'offline': last % 10 == 9,
+                'breaks': last % 10 == 7,
                 'update_started': None,
                 'checked': False,
             }
@@ -214,10 +255,10 @@ class FakeCamera:
         s = self.s
         time.sleep(random.uniform(0.2, 0.6))
         if s['offline']:
-            raise CameraError('nicht erreichbar (timed out)')
+            raise CameraError('unreachable', 'timed out')
         phase, elapsed = self._phase()
         if phase == 'rebooting':
-            raise CameraError('nicht erreichbar (Connection refused)')
+            raise CameraError('unreachable', 'Connection refused')
         if path == '/system/info':
             return {'model': 'Ruby', 'serial': s['serial'], 'version': s['version'],
                     'update_available': self.LATEST if s['checked'] and s['version'] != self.LATEST else '',
@@ -235,7 +276,7 @@ class FakeCamera:
                     'percent': min(99, int(elapsed / 25 * 100)) if phase else 100}
         if path == '/system/info/up':
             return {'success': True}
-        raise CameraError('%s %s: HTTP 404' % (method, path))
+        raise CameraError('http_error', method, path, 404, '', '', code=404)
 
     def _phase(self):
         s = self.s
@@ -262,7 +303,6 @@ def client_for(cam):
 
 
 def available_version(value, current):
-    """Liest aus update_available eine Versionsnummer; None, wenn kein Update."""
     if isinstance(value, dict):
         value = value.get('update_available') or value.get('version')
     if not value or str(value).strip().lower() in ('false', 'none', 'no', '0', 'null'):
@@ -272,10 +312,6 @@ def available_version(value, current):
     return None if version == current else version
 
 
-# ==========================================
-# 3. ABLÄUFE: PRÜFEN & AKTUALISIEREN
-# ==========================================
-
 def set_cam(ip, **fields):
     with lock:
         if ip in cameras:
@@ -283,38 +319,34 @@ def set_cam(ip, **fields):
 
 
 def check(ip):
-    """Liest Version und fragt beim ARVOO-Server nach einem Update. Ändert nichts an der Kamera."""
     cam = cameras[ip]
     api = client_for(cam)
-    set_cam(ip, status='checking', detail='Wird geprüft ...', progress=None)
+    set_cam(ip, status='checking', detail=detail('checking'), progress=None)
     info = api.call('GET', '/system/info')
     if not isinstance(info, dict):
-        raise CameraError('Unerwartete Antwort von /system/info')
+        raise CameraError('bad_info')
     set_cam(ip, version=info.get('version'), serial=info.get('serial'), model=info.get('model'), online=True)
     answer = api.call('POST', '/system/actions/check_update')
     info = api.call('GET', '/system/info')
     current = info.get('version')
     avail = available_version(answer, current) or available_version(info.get('update_available'), current)
-    # Originaltext der Kamera, falls perform_update ihn unverändert braucht
     raw = answer.get('update_available') if isinstance(answer, dict) else answer
     raw = raw if available_version(raw, current) else info.get('update_available')
     set_cam(ip, update_raw=str(raw).strip() if avail and raw else None)
     set_cam(ip, version=current, update_available=avail, last_check=now(),
             status='available' if avail else 'current',
-            detail='Update auf %s verfügbar' % avail if avail else 'Aktuell')
+            detail=detail('available', avail) if avail else detail('current'))
     return api, info, avail
 
 
 def error_fields(e):
-    offline = 'nicht erreichbar' in str(e)
-    return {'status': 'offline' if offline else 'error', 'online': not offline, 'detail': str(e)}
-
-
-check_slots = threading.BoundedSemaphore(10)
+    offline = getattr(e, 'key', None) == 'unreachable'
+    return {'status': 'offline' if offline else 'error', 'online': not offline,
+            'detail': detail(e.key, *e.args_)}
 
 
 def run_check(ip):
-    set_cam(ip, status='queued', detail='Wartet ...', progress=None)
+    set_cam(ip, status='queued', detail=detail('waiting'), progress=None)
     try:
         with check_slots:
             check(ip)
@@ -327,55 +359,41 @@ def run_check(ip):
 
 def run_update(ip):
     cam = cameras[ip]
-    entry = {'zeit': '', 'ip': ip, 'name': cam.get('name') or '', 'seriennummer': '',
-             'version_vorher': '', 'version_nachher': '', 'ergebnis': '', 'meldung': ''}
-    set_cam(ip, status='queued', detail='Wartet auf freien Platz ...', progress=None)
+    entry = {'time': '', 'ip': ip, 'name': cam.get('name') or '', 'serial': '',
+             'version_before': '', 'version_after': '', 'result': '', 'message': ''}
+    set_cam(ip, status='queued', detail=detail('waiting_slot'), progress=None)
     with update_slots:
         try:
             api, info, avail = check(ip)
             before = info.get('version')
-            entry.update(seriennummer=info.get('serial') or '', version_vorher=before or '')
+            entry.update(serial=info.get('serial') or '', version_before=before or '')
             if not avail:
-                entry.update(version_nachher=before or '', ergebnis='bereits aktuell')
+                entry.update(version_after=before or '', result=RESULT_CURRENT)
                 return
 
-            set_cam(ip, status='updating', detail='Update auf %s wird gestartet ...' % avail, progress=0)
+            set_cam(ip, status='updating', detail=detail('starting_update', avail), progress=0)
             raw = cameras[ip].get('update_raw') or avail
             fmt = perform_update(ip, api, avail, raw)
-            entry['meldung'] = 'Format: %s' % fmt
+            entry['message'] = 'Format: %s' % fmt
 
-            version = wait_for_update(ip, api, before, avail)
-            entry.update(version_nachher=version, ergebnis='erfolgreich')
+            version = wait_for_update(ip, api, before)
+            entry.update(version_after=version, result=RESULT_SUCCESS)
             set_cam(ip, version=version, update_available=None, last_update=now(),
-                    status='current', detail='Aktualisiert auf %s' % version, progress=None)
+                    status='current', detail=detail('updated', version), progress=None)
         except CameraError as e:
-            entry.update(ergebnis='fehlgeschlagen', meldung=str(e))
+            entry.update(result=RESULT_FAILED, message=str(e))
             set_cam(ip, progress=None, **error_fields(e))
         finally:
-            entry['zeit'] = now()
+            entry['time'] = now()
             write_log(entry)
             set_cam(ip, busy=False)
             save_cameras()
 
 
-# Mögliche Formate für perform_update – die Doku zeigt den Inhalt nicht.
-# Reihenfolge = Reihenfolge im Automatik-Modus.
-UPDATE_FORMATS = [
-    ('json',        'JSON {"version": "4.12.0"}'),
-    ('json_string', 'JSON-Text "4.12.0"'),
-    ('form',        'Formularfeld version=4.12.0'),
-    ('query',       'Adresse ?version=4.12.0'),
-    ('json_raw',    'JSON {"version": "<Originaltext>"}'),
-    ('text',        'Text 4.12.0'),
-    ('raw',         'Originaltext unverändert'),
-    ('none',        'ohne Inhalt'),
-]
-
-
 def send_perform_update(api, fmt, version, raw):
     answer = _send_perform_update(api, fmt, version, raw)
     if isinstance(answer, dict) and answer.get('success') is False:
-        raise CameraError('perform_update: Kamera meldet success = false (%s)' % json.dumps(answer, ensure_ascii=False)[:150], 400)
+        raise CameraError('success_false', json.dumps(answer, ensure_ascii=False)[:150], code=400)
     return answer
 
 
@@ -399,15 +417,13 @@ def _send_perform_update(api, fmt, version, raw):
 
 
 def perform_update(ip, api, version, raw):
-    """Startet das Update. Im Automatik-Modus werden bei HTTP 400 die Formate der Reihe
-    nach probiert; das erste, das die Kamera annimmt, wird für alle weiteren gespeichert."""
     fmt = config['perform_update_body']
     if fmt != 'auto':
         send_perform_update(api, fmt, version, raw)
         return fmt
     tried = []
-    for key, label in UPDATE_FORMATS:
-        set_cam(ip, detail='Update-Format wird ermittelt: %s ...' % label)
+    for key in UPDATE_FORMATS:
+        set_cam(ip, detail=detail('detecting_format', key))
         try:
             send_perform_update(api, key, version, raw)
         except CameraError as e:
@@ -420,31 +436,24 @@ def perform_update(ip, api, version, raw):
                 config['perform_update_body'] = key
                 save_config()
         return key
-    raise CameraError('Kamera lehnt alle Formate für perform_update ab (%s) – bitte Screenshot der API-Doku schicken'
-                      % ', '.join(tried), 400)
+    raise CameraError('all_formats_rejected', ', '.join(tried), code=400)
 
 
-PHASES = {'starting': 'Startet', 'downloading': 'Lädt herunter', 'installing': 'Installiert', 'finished': 'Abgeschlossen'}
-
-
-def wait_for_update(ip, api, before, target):
-    """Wartet, bis die Kamera nach dem Update mit neuer Version zurück ist."""
+def wait_for_update(ip, api, before):
     deadline = time.time() + config['update_timeout_min'] * 60
     while time.time() < deadline:
         time.sleep(1 if DEMO else 4)
         try:
             prog = api.call('GET', '/system/info/update_progress')
         except CameraError:
-            set_cam(ip, detail='Kamera startet neu ...', progress=None)
+            set_cam(ip, detail=detail('rebooting'), progress=None)
             continue
         if isinstance(prog, dict):
             if prog.get('error'):
-                raise CameraError('Update fehlgeschlagen (update_progress meldet Fehler)')
-            phase = prog.get('phase')
+                raise CameraError('update_error')
+            phase = prog.get('phase') or 'running'
             pct = prog.get('percent')
-            set_cam(ip, detail='%s ...' % PHASES.get(phase, phase or 'Läuft'),
-                    progress=pct if isinstance(pct, (int, float)) else None)
-        # Erfolg erst, wenn die Kamera wirklich die neue Version meldet
+            set_cam(ip, detail=detail('phase', phase), progress=pct if isinstance(pct, (int, float)) else None)
         try:
             info = api.call('GET', '/system/info')
         except CameraError:
@@ -452,7 +461,7 @@ def wait_for_update(ip, api, before, target):
         version = info.get('version') if isinstance(info, dict) else None
         if version and version != before:
             return version
-    raise CameraError('Zeitüberschreitung: Version nach %d min unverändert' % config['update_timeout_min'])
+    raise CameraError('timeout', config['update_timeout_min'])
 
 
 def start_jobs(ips, job):
@@ -468,16 +477,10 @@ def start_jobs(ips, job):
     return started
 
 
-# ==========================================
-# 4. WEBSERVER
-# ==========================================
-
 IP_RE = re.compile(r'^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}(:\d{1,5})?$')
 
 
 def normalize_address(text):
-    """'http://10.32.75.8:566/' -> '10.32.75.8:566', '10.32.75.8' -> '10.32.75.8:577' (Standardport).
-    Gleiche IP mit verschiedenen Ports sind verschiedene Kameras."""
     addr = re.sub(r'^[a-zA-Z]+://', '', text.strip()).split('/')[0]
     if addr and ':' not in addr:
         addr = '%s:%s' % (addr, config.get('port', 577))
@@ -485,9 +488,6 @@ def normalize_address(text):
 
 
 def parse_camera_lines(text):
-    """Eine Kamera pro Zeile: 'IP' oder 'IP Name' oder 'IP; Name; Passwort'.
-    Statt der IP geht auch der Link, z. B. 'http://10.32.75.8:566/'.
-    Im Semikolon-Format wird das Passwort genau so übernommen (leer = Standardpasswort)."""
     result, errors = [], []
     for line in text.splitlines():
         line = line.strip()
@@ -547,6 +547,7 @@ class Handler(BaseHTTPRequestHandler):
                 body = f.read()
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Cache-Control', 'no-store')
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -556,19 +557,19 @@ class Handler(BaseHTTPRequestHandler):
             body = open(log_file(), 'rb').read() if os.path.exists(log_file()) else ';'.join(LOG_FIELDS).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'text/csv; charset=utf-8')
-            self.send_header('Content-Disposition', 'attachment; filename="kamera_update_protokoll.csv"')
+            self.send_header('Content-Disposition', 'attachment; filename="camera_update_log.csv"')
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
         else:
-            self.send_json({'error': 'nicht gefunden'}, 404)
+            self.send_json({'error': 'not found'}, 404)
 
     def do_POST(self):
         path = urlparse(self.path).path
         try:
             data = self.read_json()
         except ValueError:
-            return self.send_json({'error': 'ungültiges JSON'}, 400)
+            return self.send_json({'error': 'invalid JSON'}, 400)
 
         if path == '/api/cameras':
             entries, errors = parse_camera_lines(data.get('text', ''))
@@ -612,14 +613,14 @@ class Handler(BaseHTTPRequestHandler):
             save_config()
             return self.send_json({'ok': True, 'restart_needed': 'parallel' in data})
 
-        self.send_json({'error': 'nicht gefunden'}, 404)
+        self.send_json({'error': 'not found'}, 404)
 
 
 def main():
     global DEMO, DATA_DIR, config, update_slots
-    parser = argparse.ArgumentParser(description='Kamera-Update für ARVOO-Kameras')
-    parser.add_argument('--demo', action='store_true', help='simulierte Kameras zum Ausprobieren')
-    parser.add_argument('--host', default='127.0.0.1', help='0.0.0.0 = im Netzwerk erreichbar')
+    parser = argparse.ArgumentParser(description='Camera update tool for ARVOO cameras')
+    parser.add_argument('--demo', action='store_true', help='simulated cameras for trying it out')
+    parser.add_argument('--host', default='127.0.0.1', help='0.0.0.0 = reachable from the network')
     parser.add_argument('--port', type=int, default=8080)
     args = parser.parse_args()
 
@@ -628,12 +629,13 @@ def main():
     os.makedirs(DATA_DIR, exist_ok=True)
     config = load_config()
     update_slots = threading.BoundedSemaphore(int(config['parallel']))
+    migrate_log()
     load_cameras()
 
     if DEMO and not cameras:
         demo_text = '\n'.join([
-            '10.32.47.131 Parkhaus Nord', '10.32.47.132 Parkhaus Nord', '10.32.47.135 Einfahrt Süd',
-            '10.32.47.137 Ausfahrt Süd', '10.32.47.140 Mitarbeiterparkplatz', '10.32.47.149 Lieferzone',
+            '10.32.47.131 Car park North', '10.32.47.132 Car park North', '10.32.47.135 Entrance South',
+            '10.32.47.137 Exit South', '10.32.47.140 Staff car park', '10.32.47.149 Delivery zone',
         ])
         for e in parse_camera_lines(demo_text)[0]:
             cameras[e['ip']] = new_camera(e)
@@ -641,11 +643,11 @@ def main():
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     host = 'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host
-    print('Kamera-Update läuft%s: http://%s:%d  (Beenden mit Strg+C)' % (' im DEMO-Modus' if DEMO else '', host, args.port))
+    print('Camera update running%s: http://%s:%d  (stop with Ctrl+C)' % (' in DEMO mode' if DEMO else '', host, args.port))
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print('\nBeendet.')
+        print('\nStopped.')
 
 
 if __name__ == '__main__':

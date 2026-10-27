@@ -1,5 +1,5 @@
 @echo off
-rem Startet das Kamera-Update-Tool und oeffnet den Browser.
+rem Starts the camera update tool and opens the browser.
 cd /d "%~dp0"
 set PY=python
 where py >nul 2>nul && set PY=py

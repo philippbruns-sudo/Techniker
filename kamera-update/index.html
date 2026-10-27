@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Smart Parking - Kamera-Update</title>
+  <title>Smart Parking - Camera Update</title>
   <style>
     body {
       font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
@@ -34,7 +34,7 @@
     .demo-tag { background-color: #ff6600; color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; margin-left: 8px; }
     .app-body { padding: 24px 28px 28px 28px; }
 
-    /* ---------- Kennzahlen ---------- */
+    /* ---------- KPIs ---------- */
     .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px; }
     .kpi {
       border-radius: 12px; padding: 14px 18px;
@@ -50,7 +50,7 @@
     .kpi.run { border-left-color: #185a9d; }
     .kpi.bad { border-left-color: #e53e3e; }
 
-    /* ---------- Karten / Abschnitte ---------- */
+    /* ---------- Sections ---------- */
     .section { margin-bottom: 28px; }
     .section-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
     .section-head h2 { margin: 0; font-size: 18px; color: #002d56; }
@@ -78,7 +78,7 @@
     .btn-icon:hover { background-color: #f3e9e2; color: #002d56; }
     .btn-icon:disabled { opacity: 0.3; cursor: not-allowed; background: none; }
 
-    /* ---------- Tabellen ---------- */
+    /* ---------- Tables ---------- */
     .table-wrap { border: 2px solid #f3e9e2; border-radius: 10px; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th {
@@ -98,19 +98,19 @@
     .empty { text-align: center; padding: 30px; color: #94a3b8; }
     input[type="checkbox"] { width: 17px; height: 17px; accent-color: #ff6600; cursor: pointer; }
 
-    /* ---------- Status-Anzeige ---------- */
+    /* ---------- Status ---------- */
     .badge {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; white-space: nowrap;
     }
     .b-idle { background-color: #edf2f7; color: #64748b; }
     .b-checking, .b-queued { background-color: #e2f0fe; color: #185a9d; }
-    .b-current, .b-erfolgreich { background-color: #d4edda; color: #155724; }
+    .b-current, .b-res-success { background-color: #d4edda; color: #155724; }
     .b-available { background-color: #fff1e6; color: #c26100; }
     .b-updating { background-color: #ff6600; color: white; }
     .b-offline { background-color: #edf2f7; color: #4a5568; }
-    .b-error, .b-fehlgeschlagen { background-color: #f8d7da; color: #721c24; }
-    .b-aktuell { background-color: #edf2f7; color: #4a5568; }
+    .b-error, .b-res-failed { background-color: #f8d7da; color: #721c24; }
+    .b-res-current { background-color: #edf2f7; color: #4a5568; }
     .status-detail { font-size: 12px; color: #64748b; margin-top: 4px; max-width: 420px; word-break: break-word; }
     .b-error + .status-detail, .b-offline + .status-detail { color: #c53030; }
     .bar { height: 5px; background-color: #f3e9e2; border-radius: 3px; margin-top: 6px; overflow: hidden; max-width: 200px; }
@@ -130,7 +130,7 @@
     }
     .filter:focus, textarea:focus, .field input:focus, .field select:focus { border-color: #ff6600; outline: none; }
 
-    /* ---------- Dialoge ---------- */
+    /* ---------- Dialogs ---------- */
     .dimmer {
       position: fixed; inset: 0; background-color: rgba(0,0,0,0.6);
       z-index: 999; display: none; justify-content: center; align-items: center;
@@ -180,6 +180,14 @@
       .field.full { grid-column: auto; }
       .app-body { padding: 18px; }
     }
+
+    /* ---------- Language ---------- */
+    .lang-switch { display: flex; border: 2px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+    .lang-switch button {
+      background: white; border: none; padding: 7px 12px; cursor: pointer;
+      font-size: 13px; font-weight: 700; font-family: inherit; color: #64748b;
+    }
+    .lang-switch button.active { background-color: #002d56; color: white; }
   </style>
 </head>
 <body>
@@ -190,36 +198,39 @@
          onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='block';">
     <div id="logoFallback" class="logo-fallback">Smart Parking</div>
     <div class="header-right">
-      <button class="btn btn-secondary" onclick="openSettings()">⚙ Einstellungen</button>
+      <div class="lang-switch">
+        <button data-lang="de" onclick="setLang('de')">DE</button>
+        <button data-lang="en" onclick="setLang('en')">EN</button>
+      </div>
+      <button class="btn btn-secondary" onclick="openSettings()" data-i18n="settings_btn"></button>
       <div class="header-title">
-        <h1>Kamera-Update<span id="demoTag" class="demo-tag" style="display:none;">DEMO</span></h1>
+        <h1><span data-i18n="app_title"></span><span id="demoTag" class="demo-tag" style="display:none;">DEMO</span></h1>
         <span class="subtitle">ARVOO Ruby</span>
       </div>
     </div>
   </div>
-  <div class="offline-banner" id="offlineBanner">Keine Verbindung zum Update-Server (server.py läuft nicht?) – neuer Versuch läuft ...</div>
+  <div class="offline-banner" id="offlineBanner" data-i18n="offline_banner"></div>
 
   <div class="app-body">
 
     <div class="kpis">
-      <div class="kpi total"><h4>Kameras</h4><p id="kTotal">0</p></div>
-      <div class="kpi ok"><h4>Aktuell</h4><p id="kOk">0</p></div>
-      <div class="kpi avail"><h4>Update verfügbar</h4><p id="kAvail">0</p></div>
-      <div class="kpi run"><h4>Läuft gerade</h4><p id="kRun">0</p></div>
-      <div class="kpi bad"><h4>Offline / Fehler</h4><p id="kBad">0</p></div>
+      <div class="kpi total"><h4 data-i18n="kpi_total"></h4><p id="kTotal">0</p></div>
+      <div class="kpi ok"><h4 data-i18n="kpi_ok"></h4><p id="kOk">0</p></div>
+      <div class="kpi avail"><h4 data-i18n="kpi_avail"></h4><p id="kAvail">0</p></div>
+      <div class="kpi run"><h4 data-i18n="kpi_run"></h4><p id="kRun">0</p></div>
+      <div class="kpi bad"><h4 data-i18n="kpi_bad"></h4><p id="kBad">0</p></div>
     </div>
 
-    <!-- Kameraliste -->
     <div class="section">
       <div class="section-head">
-        <h2>Kameras <small id="selInfo"></small></h2>
+        <h2><span data-i18n="cams_title"></span> <small id="selInfo"></small></h2>
         <div class="toolbar">
-          <button class="btn btn-secondary" onclick="openAdd()">＋ IPs eintragen</button>
-          <button class="btn btn-navy" id="btnCheckAll" onclick="checkCams(allIps())">🔍 Alle prüfen</button>
-          <button class="btn btn-primary" id="btnUpdateSel" onclick="askUpdate(selectedIps())">⬆ Ausgewählte aktualisieren</button>
-          <button class="btn btn-primary" id="btnUpdateAvail" onclick="askUpdate(availableIps())">⬆ Alle mit Update aktualisieren</button>
-          <button class="btn btn-primary" id="btnUpdateAll" onclick="askUpdate(idleIps())">⬆ Alle aktualisieren</button>
-          <button class="btn btn-danger" id="btnDeleteSel" onclick="askDelete(selectedIps())">Entfernen</button>
+          <button class="btn btn-secondary" onclick="openAdd()" data-i18n="btn_add"></button>
+          <button class="btn btn-navy" id="btnCheckAll" onclick="checkCams(allIps())" data-i18n="btn_check_all"></button>
+          <button class="btn btn-primary" id="btnUpdateSel" onclick="askUpdate(selectedIps())" data-i18n="btn_update_sel"></button>
+          <button class="btn btn-primary" id="btnUpdateAvail" onclick="askUpdate(availableIps())" data-i18n="btn_update_avail"></button>
+          <button class="btn btn-primary" id="btnUpdateAll" onclick="askUpdate(idleIps())" data-i18n="btn_update_all"></button>
+          <button class="btn btn-danger" id="btnDeleteSel" onclick="askDelete(selectedIps())" data-i18n="btn_remove"></button>
         </div>
       </div>
       <div class="table-wrap">
@@ -227,14 +238,14 @@
           <thead>
             <tr>
               <th style="width:30px;"><input type="checkbox" id="selAll" onclick="toggleAll(this.checked)"></th>
-              <th>IP-Adresse</th>
-              <th>Name / Standort</th>
-              <th>Status</th>
-              <th>Version</th>
-              <th>Verfügbar</th>
-              <th>Seriennummer</th>
-              <th>Zuletzt geprüft</th>
-              <th>Letztes Update</th>
+              <th data-i18n="th_ip"></th>
+              <th data-i18n="th_name"></th>
+              <th data-i18n="th_status"></th>
+              <th data-i18n="th_version"></th>
+              <th data-i18n="th_avail"></th>
+              <th data-i18n="th_serial"></th>
+              <th data-i18n="th_checked"></th>
+              <th data-i18n="th_updated"></th>
               <th style="width:110px;"></th>
             </tr>
           </thead>
@@ -243,27 +254,26 @@
       </div>
     </div>
 
-    <!-- Protokoll -->
     <div class="section" style="margin-bottom:0;">
       <div class="section-head">
-        <h2>Update-Protokoll <small id="logInfo"></small></h2>
+        <h2><span data-i18n="log_title"></span> <small id="logInfo"></small></h2>
         <div class="toolbar">
-          <input class="filter" id="logFilter" placeholder="Filtern nach IP, Name, Version ..." oninput="renderLog()">
-          <a class="btn btn-secondary" href="/api/log.csv" download style="text-decoration:none;">⬇ CSV herunterladen</a>
+          <input class="filter" id="logFilter" data-i18n-ph="log_filter" oninput="renderLog()">
+          <a class="btn btn-secondary" href="/api/log.csv" download style="text-decoration:none;" data-i18n="btn_csv"></a>
         </div>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Zeitpunkt</th>
-              <th>IP-Adresse</th>
-              <th>Name / Standort</th>
-              <th>Seriennummer</th>
-              <th>Vorher</th>
-              <th>Nachher</th>
-              <th>Ergebnis</th>
-              <th>Meldung</th>
+              <th data-i18n="th_time"></th>
+              <th data-i18n="th_ip"></th>
+              <th data-i18n="th_name"></th>
+              <th data-i18n="th_serial"></th>
+              <th data-i18n="th_before"></th>
+              <th data-i18n="th_after"></th>
+              <th data-i18n="th_result"></th>
+              <th data-i18n="th_message"></th>
             </tr>
           </thead>
           <tbody id="logBody"></tbody>
@@ -274,76 +284,52 @@
   </div>
 </div>
 
-<!-- Dialog: Kameras hinzufügen -->
 <div class="dimmer" id="addDialog">
   <div class="dialog">
-    <h3>Kameras hinzufügen</h3>
-    <p>Eine Kamera pro Zeile – einfach die Liste mit Links oder IPs einfügen. Ohne Port gilt 577.
-      Gleiche IP mit anderem Port ist eine eigene Kamera. Neue Kameras werden danach automatisch geprüft.</p>
-    <div class="hint">
-      <code>http://10.32.75.8:577/</code><br>
-      <code>10.32.75.8:566</code><br>
-      <code>10.32.47.135</code><br>
-      <code>10.32.47.135 Parkhaus Nord</code><br>
-      <code>10.32.47.135; Parkhaus Nord; Passwort</code> &nbsp;(eigenes Passwort)<br>
-      <code>10.32.47.135; Parkhaus Nord;</code> &nbsp;(wieder Standardpasswort)<br>
-      <code>10.32.47.135:577</code> &nbsp;(anderer Port)
-    </div>
-    <textarea id="addText" placeholder="http://10.32.75.118:577/&#10;http://10.32.75.118:566/&#10;10.32.47.135 Einfahrt Süd"></textarea>
+    <h3 data-i18n="add_title"></h3>
+    <p data-i18n="add_text"></p>
+    <div class="hint" data-i18n="add_hint"></div>
+    <textarea id="addText" data-i18n-ph="add_placeholder"></textarea>
     <div class="dialog-actions">
-      <button class="btn btn-secondary" onclick="closeDialog('addDialog')">Abbrechen</button>
-      <button class="btn btn-primary" onclick="addCams()">Hinzufügen</button>
+      <button class="btn btn-secondary" onclick="closeDialog('addDialog')" data-i18n="btn_cancel"></button>
+      <button class="btn btn-primary" onclick="addCams()" data-i18n="btn_add_confirm"></button>
     </div>
   </div>
 </div>
 
-<!-- Dialog: Update bestätigen -->
 <div class="dimmer" id="confirmDialog">
   <div class="dialog">
-    <h3 id="confirmTitle">Update starten?</h3>
+    <h3 id="confirmTitle"></h3>
     <p id="confirmText"></p>
     <ul class="confirm-list" id="confirmList"></ul>
-    <div class="hint warn" id="confirmWarn">Die Kameras laden die neueste Firmware vom ARVOO-Server und starten neu.
-      Während des Updates liefern sie keine Kennzeichen-Ergebnisse.</div>
+    <div class="hint warn" id="confirmWarn" data-i18n="update_warn"></div>
     <div class="dialog-actions">
-      <button class="btn btn-secondary" onclick="closeDialog('confirmDialog')">Abbrechen</button>
-      <button class="btn btn-primary" id="confirmOk">Starten</button>
+      <button class="btn btn-secondary" onclick="closeDialog('confirmDialog')" data-i18n="btn_cancel"></button>
+      <button class="btn btn-primary" id="confirmOk"></button>
     </div>
   </div>
 </div>
 
-<!-- Dialog: Einstellungen -->
 <div class="dimmer" id="settingsDialog">
   <div class="dialog">
-    <h3>Einstellungen</h3>
-    <p>Gelten für alle Kameras ohne eigenes Passwort. Werden in <code>config.json</code> neben <code>server.py</code> gespeichert.</p>
+    <h3 data-i18n="settings_title"></h3>
+    <p data-i18n="settings_text"></p>
     <div class="fields">
-      <div class="field"><label>Benutzer</label><input id="sUser"></div>
-      <div class="field"><label>Passwort</label><input id="sPassword" type="password" placeholder="unverändert"><small id="sPwState"></small></div>
+      <div class="field"><label data-i18n="s_user"></label><input id="sUser"></div>
+      <div class="field"><label data-i18n="s_password"></label><input id="sPassword" type="password" data-i18n-ph="s_password_ph"><small id="sPwState"></small></div>
       <div class="field"><label>Port</label><input id="sPort" type="number"></div>
-      <div class="field"><label>API-Pfad</label><input id="sPrefix"></div>
-      <div class="field"><label>Anmeldung</label>
+      <div class="field"><label data-i18n="s_prefix"></label><input id="sPrefix"></div>
+      <div class="field"><label data-i18n="s_auth"></label>
         <select id="sAuth"><option value="basic">Basic</option><option value="digest">Digest</option></select></div>
-      <div class="field"><label>Gleichzeitige Updates</label><input id="sParallel" type="number" min="1" max="20">
-        <small>Änderung wirkt nach Neustart von server.py</small></div>
+      <div class="field"><label data-i18n="s_parallel"></label><input id="sParallel" type="number" min="1" max="20">
+        <small data-i18n="s_parallel_hint"></small></div>
       <div class="field full"><label>Format perform_update</label>
-        <select id="sBody">
-          <option value="auto">Automatisch ermitteln (empfohlen)</option>
-          <option value="json">JSON {"version": "4.12.0"}</option>
-          <option value="json_string">JSON-Text "4.12.0"</option>
-          <option value="form">Formularfeld version=4.12.0</option>
-          <option value="query">Adresse ?version=4.12.0</option>
-          <option value="json_raw">JSON {"version": "&lt;Originaltext&gt;"}</option>
-          <option value="text">Text 4.12.0</option>
-          <option value="raw">Originaltext unverändert</option>
-          <option value="none">Ohne Inhalt</option>
-        </select>
-        <small>„Automatisch“ probiert beim ersten Update die Formate durch und speichert das erste,
-          das die Kamera annimmt. Danach steht hier das gefundene Format.</small></div>
+        <select id="sBody"></select>
+        <small data-i18n="s_format_hint"></small></div>
     </div>
     <div class="dialog-actions">
-      <button class="btn btn-secondary" onclick="closeDialog('settingsDialog')">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveSettings()">Speichern</button>
+      <button class="btn btn-secondary" onclick="closeDialog('settingsDialog')" data-i18n="btn_cancel"></button>
+      <button class="btn btn-primary" onclick="saveSettings()" data-i18n="btn_save"></button>
     </div>
   </div>
 </div>
@@ -351,29 +337,165 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/*
- * Oberfläche für server.py. Fragt alle 2 Sekunden GET /api/state ab.
- * Aktionen: POST /api/cameras, /api/cameras/delete, /api/check, /api/update, /api/settings.
- */
-
 var POLL_MS = 2000;
 var state = { cameras: [], log: [], settings: {} };
 var selected = {};
+var lang = 'en';
 
-var STATUS = {
-  idle:      ['Nicht geprüft', ''],
-  checking:  ['Prüft', 'spin'],
-  queued:    ['Wartet', ''],
-  current:   ['Aktuell', ''],
-  available: ['Update verfügbar', ''],
-  updating:  ['Update läuft', 'spin'],
-  offline:   ['Offline', ''],
-  error:     ['Fehler', '']
+var FORMATS = ['json', 'json_string', 'form', 'query', 'json_raw', 'text', 'raw', 'none'];
+
+var I18N = {
+  de: {
+    app_title: 'Kamera-Update',
+    settings_btn: '⚙ Einstellungen',
+    offline_banner: 'Keine Verbindung zum Update-Server (läuft server.py?) – neuer Versuch läuft ...',
+    kpi_total: 'Kameras', kpi_ok: 'Aktuell', kpi_avail: 'Update verfügbar', kpi_run: 'Läuft gerade', kpi_bad: 'Offline / Fehler',
+    cams_title: 'Kameras',
+    btn_add: '＋ IPs eintragen', btn_check_all: '🔍 Alle prüfen', btn_update_sel: '⬆ Ausgewählte aktualisieren',
+    btn_update_avail: '⬆ Alle mit Update aktualisieren', btn_update_all: '⬆ Alle aktualisieren', btn_remove: 'Entfernen',
+    th_ip: 'IP-Adresse', th_name: 'Name / Standort', th_status: 'Status', th_version: 'Version', th_avail: 'Verfügbar',
+    th_serial: 'Seriennummer', th_checked: 'Zuletzt geprüft', th_updated: 'Letztes Update',
+    th_time: 'Zeitpunkt', th_before: 'Vorher', th_after: 'Nachher', th_result: 'Ergebnis', th_message: 'Meldung',
+    log_title: 'Update-Protokoll', log_filter: 'Filtern nach IP, Name, Version ...', btn_csv: '⬇ CSV herunterladen',
+    log_info: '{0} Einträge, davon {1} erfolgreiche Updates',
+    sel_info: '{0} ausgewählt', total_info: '{0} gesamt',
+    empty_cams: 'Noch keine Kameras – über „＋ IPs eintragen“ die Liste einfügen.',
+    empty_log: 'Noch keine Updates protokolliert.', no_match: 'Keine Treffer.',
+    add_title: 'Kameras hinzufügen',
+    add_text: 'Eine Kamera pro Zeile – einfach die Liste mit Links oder IPs einfügen. Ohne Port gilt 577. ' +
+      'Gleiche IP mit anderem Port ist eine eigene Kamera. Neue Kameras werden danach automatisch geprüft.',
+    add_hint: '<code>http://10.32.75.8:577/</code><br><code>10.32.75.8:566</code><br><code>10.32.47.135</code><br>' +
+      '<code>10.32.47.135 Parkhaus Nord</code><br>' +
+      '<code>10.32.47.135; Parkhaus Nord; Passwort</code> &nbsp;(eigenes Passwort)<br>' +
+      '<code>10.32.47.135; Parkhaus Nord;</code> &nbsp;(wieder Standardpasswort)',
+    add_placeholder: 'http://10.32.75.118:577/\nhttp://10.32.75.118:566/\n10.32.47.135 Einfahrt Süd',
+    btn_cancel: 'Abbrechen', btn_add_confirm: 'Hinzufügen', btn_save: 'Speichern',
+    update_title: 'Update starten?',
+    update_text: '{0} Kamera(s) werden geprüft und – falls verfügbar – auf die neueste Version aktualisiert. Bis zu {1} gleichzeitig.',
+    update_warn: 'Die Kameras laden die neueste Firmware vom ARVOO-Server und starten neu. Während des Updates liefern sie keine Kennzeichen-Ergebnisse.',
+    btn_start_update: '⬆ Update starten',
+    remove_title: 'Kameras entfernen?', remove_text: '{0} Kamera(s) werden aus der Liste entfernt. Das Protokoll bleibt erhalten.',
+    settings_title: 'Einstellungen',
+    settings_text: 'Gelten für alle Kameras ohne eigenes Passwort. Werden in <code>config.json</code> neben <code>server.py</code> gespeichert.',
+    s_user: 'Benutzer', s_password: 'Passwort', s_password_ph: 'unverändert',
+    pw_set: 'Ein Passwort ist gespeichert.', pw_missing: 'Noch kein Passwort gespeichert!',
+    s_prefix: 'API-Pfad', s_auth: 'Anmeldung', s_parallel: 'Gleichzeitige Updates', s_parallel_hint: 'Änderung wirkt nach Neustart von server.py',
+    s_format_hint: 'Bestätigt: JSON {"version": "…"}. „Automatisch“ probiert alle Formate durch und speichert das erste, das die Kamera annimmt.',
+    fmt_auto: 'Automatisch ermitteln', fmt_json: 'JSON {"version": "4.12.0"}', fmt_json_string: 'JSON-Text "4.12.0"',
+    fmt_form: 'Formularfeld version=4.12.0', fmt_query: 'Adresse ?version=4.12.0', fmt_json_raw: 'JSON {"version": "<Originaltext>"}',
+    fmt_text: 'Text 4.12.0', fmt_raw: 'Originaltext unverändert', fmt_none: 'Ohne Inhalt',
+    t_checking: '{0} Kamera(s) werden geprüft', t_updates: '{0} Update(s) gestartet', t_added: '{0} Kamera(s) hinzugefügt',
+    t_existing: ', {0} schon vorhanden', t_invalid: ' – {0} Zeile(n) nicht erkannt: {1}', t_checking_new: '. Neue Kameras werden geprüft ...',
+    t_saved: 'Einstellungen gespeichert',
+    st_idle: 'Nicht geprüft', st_checking: 'Prüft', st_queued: 'Wartet', st_current: 'Aktuell', st_available: 'Update verfügbar',
+    st_updating: 'Update läuft', st_offline: 'Offline', st_error: 'Fehler',
+    title_check: 'Prüfen', title_update: 'Update', title_remove: 'Entfernen', title_own_pw: 'eigenes Passwort',
+    title_open: 'Weboberfläche der Kamera öffnen', title_reports: 'Kamera meldet: ',
+    res_success: 'erfolgreich', res_current: 'bereits aktuell', res_failed: 'fehlgeschlagen',
+    phase_starting: 'Startet', phase_downloading: 'Lädt herunter', phase_installing: 'Installiert', phase_finished: 'Abgeschlossen', phase_running: 'Läuft',
+    msg_checking: 'Wird geprüft ...', msg_waiting: 'Wartet ...', msg_waiting_slot: 'Wartet auf freien Platz ...',
+    msg_available: 'Update auf {0} verfügbar', msg_current: 'Aktuell', msg_starting_update: 'Update auf {0} wird gestartet ...',
+    msg_detecting_format: 'Update-Format wird ermittelt: {0} ...', msg_phase: '{0} ...', msg_rebooting: 'Kamera startet neu ...',
+    msg_updated: 'Aktualisiert auf {0}', msg_auth_failed: 'Anmeldung abgelehnt (HTTP 401) – Passwort prüfen',
+    msg_unreachable: 'nicht erreichbar ({0})', msg_http_error: '{0} {1}: HTTP {2}{3}{4}',
+    msg_bad_info: 'Unerwartete Antwort von /system/info', msg_success_false: 'perform_update: Kamera meldet success = false ({0})',
+    msg_all_formats_rejected: 'Kamera lehnt alle Formate für perform_update ab ({0})',
+    msg_update_error: 'Update fehlgeschlagen (update_progress meldet Fehler)', msg_timeout: 'Zeitüberschreitung: Version nach {0} min unverändert'
+  },
+  en: {
+    app_title: 'Camera Update',
+    settings_btn: '⚙ Settings',
+    offline_banner: 'No connection to the update server (is server.py running?) – retrying ...',
+    kpi_total: 'Cameras', kpi_ok: 'Up to date', kpi_avail: 'Update available', kpi_run: 'In progress', kpi_bad: 'Offline / Error',
+    cams_title: 'Cameras',
+    btn_add: '＋ Add IPs', btn_check_all: '🔍 Check all', btn_update_sel: '⬆ Update selected',
+    btn_update_avail: '⬆ Update all with update', btn_update_all: '⬆ Update all', btn_remove: 'Remove',
+    th_ip: 'IP address', th_name: 'Name / location', th_status: 'Status', th_version: 'Version', th_avail: 'Available',
+    th_serial: 'Serial number', th_checked: 'Last checked', th_updated: 'Last update',
+    th_time: 'Time', th_before: 'Before', th_after: 'After', th_result: 'Result', th_message: 'Message',
+    log_title: 'Update log', log_filter: 'Filter by IP, name, version ...', btn_csv: '⬇ Download CSV',
+    log_info: '{0} entries, {1} successful updates',
+    sel_info: '{0} selected', total_info: '{0} total',
+    empty_cams: 'No cameras yet – paste your list via “＋ Add IPs”.',
+    empty_log: 'No updates logged yet.', no_match: 'No matches.',
+    add_title: 'Add cameras',
+    add_text: 'One camera per line – just paste the list of links or IPs. Without a port, 577 is used. ' +
+      'The same IP with a different port is a separate camera. New cameras are checked automatically afterwards.',
+    add_hint: '<code>http://10.32.75.8:577/</code><br><code>10.32.75.8:566</code><br><code>10.32.47.135</code><br>' +
+      '<code>10.32.47.135 Car park North</code><br>' +
+      '<code>10.32.47.135; Car park North; password</code> &nbsp;(own password)<br>' +
+      '<code>10.32.47.135; Car park North;</code> &nbsp;(back to default password)',
+    add_placeholder: 'http://10.32.75.118:577/\nhttp://10.32.75.118:566/\n10.32.47.135 Entrance South',
+    btn_cancel: 'Cancel', btn_add_confirm: 'Add', btn_save: 'Save',
+    update_title: 'Start update?',
+    update_text: '{0} camera(s) will be checked and, if available, updated to the latest version. Up to {1} at a time.',
+    update_warn: 'The cameras download the latest firmware from the ARVOO server and restart. They deliver no plate results during the update.',
+    btn_start_update: '⬆ Start update',
+    remove_title: 'Remove cameras?', remove_text: '{0} camera(s) will be removed from the list. The log is kept.',
+    settings_title: 'Settings',
+    settings_text: 'Apply to all cameras without their own password. Saved in <code>config.json</code> next to <code>server.py</code>.',
+    s_user: 'User', s_password: 'Password', s_password_ph: 'unchanged',
+    pw_set: 'A password is saved.', pw_missing: 'No password saved yet!',
+    s_prefix: 'API path', s_auth: 'Authentication', s_parallel: 'Parallel updates', s_parallel_hint: 'Takes effect after restarting server.py',
+    s_format_hint: 'Confirmed: JSON {"version": "…"}. “Detect automatically” tries all formats and saves the first one the camera accepts.',
+    fmt_auto: 'Detect automatically', fmt_json: 'JSON {"version": "4.12.0"}', fmt_json_string: 'JSON string "4.12.0"',
+    fmt_form: 'Form field version=4.12.0', fmt_query: 'URL ?version=4.12.0', fmt_json_raw: 'JSON {"version": "<original text>"}',
+    fmt_text: 'Text 4.12.0', fmt_raw: 'Original text unchanged', fmt_none: 'No body',
+    t_checking: 'Checking {0} camera(s)', t_updates: '{0} update(s) started', t_added: '{0} camera(s) added',
+    t_existing: ', {0} already listed', t_invalid: ' – {0} line(s) not recognized: {1}', t_checking_new: '. Checking new cameras ...',
+    t_saved: 'Settings saved',
+    st_idle: 'Not checked', st_checking: 'Checking', st_queued: 'Waiting', st_current: 'Up to date', st_available: 'Update available',
+    st_updating: 'Updating', st_offline: 'Offline', st_error: 'Error',
+    title_check: 'Check', title_update: 'Update', title_remove: 'Remove', title_own_pw: 'own password',
+    title_open: 'Open camera web interface', title_reports: 'Camera reports: ',
+    res_success: 'success', res_current: 'up to date', res_failed: 'failed',
+    phase_starting: 'Starting', phase_downloading: 'Downloading', phase_installing: 'Installing', phase_finished: 'Finished', phase_running: 'Running',
+    msg_checking: 'Checking ...', msg_waiting: 'Waiting ...', msg_waiting_slot: 'Waiting for a free slot ...',
+    msg_available: 'Update to {0} available', msg_current: 'Up to date', msg_starting_update: 'Starting update to {0} ...',
+    msg_detecting_format: 'Detecting update format: {0} ...', msg_phase: '{0} ...', msg_rebooting: 'Camera is restarting ...',
+    msg_updated: 'Updated to {0}', msg_auth_failed: 'Login rejected (HTTP 401) – check password',
+    msg_unreachable: 'not reachable ({0})', msg_http_error: '{0} {1}: HTTP {2}{3}{4}',
+    msg_bad_info: 'Unexpected response from /system/info', msg_success_false: 'perform_update: camera reports success = false ({0})',
+    msg_all_formats_rejected: 'Camera rejects all formats for perform_update ({0})',
+    msg_update_error: 'Update failed (update_progress reports an error)', msg_timeout: 'Timeout: version unchanged after {0} min'
+  }
 };
 
-// ==========================================
-// 1. SERVER
-// ==========================================
+var RESULTS = {
+  'success': 'success', 'erfolgreich': 'success',
+  'up to date': 'current', 'bereits aktuell': 'current',
+  'failed': 'failed', 'fehlgeschlagen': 'failed'
+};
+
+function t(key) {
+  var text = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+  var args = Array.prototype.slice.call(arguments, 1);
+  return text.replace(/\{(\d+)\}/g, function(m, i) { return args[i] !== undefined ? args[i] : m; });
+}
+
+function setLang(l) {
+  lang = I18N[l] ? l : 'en';
+  try { localStorage.setItem('lang', lang); } catch (e) {}
+  document.documentElement.lang = lang;
+  document.title = 'Smart Parking - ' + t('app_title');
+  document.querySelectorAll('[data-i18n]').forEach(function(el) { el.innerHTML = t(el.getAttribute('data-i18n')); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(function(el) { el.placeholder = t(el.getAttribute('data-i18n-ph')); });
+  document.querySelectorAll('.lang-switch button').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-lang') === lang); });
+  var sel = document.getElementById('sBody');
+  var current = sel.value;
+  sel.innerHTML = ['auto'].concat(FORMATS).map(function(f) { return '<option value="' + f + '">' + esc(t('fmt_' + f)) + '</option>'; }).join('');
+  if (current) sel.value = current;
+  render();
+}
+
+function message(d) {
+  if (!d) return '';
+  if (typeof d === 'string') return d;
+  var args = (d.args || []).slice();
+  if (d.key === 'phase') args[0] = t('phase_' + args[0]) !== 'phase_' + args[0] ? t('phase_' + args[0]) : args[0];
+  if (d.key === 'detecting_format') args[0] = t('fmt_' + args[0]);
+  return t.apply(null, ['msg_' + d.key].concat(args));
+}
 
 function post(url, data) {
   return fetch(url, {
@@ -397,15 +519,10 @@ function refresh() {
 
 function poll() { refresh().then(function() { setTimeout(poll, POLL_MS); }); }
 
-// ==========================================
-// 2. ANZEIGE
-// ==========================================
-
 function render() {
   document.getElementById('demoTag').style.display = state.demo ? 'inline' : 'none';
   var cams = state.cameras.slice().sort(function(a, b) { return ipKey(a.ip).localeCompare(ipKey(b.ip)); });
 
-  // Auswahl auf vorhandene Kameras beschränken
   Object.keys(selected).forEach(function(ip) { if (!cams.some(function(c) { return c.ip === ip; })) delete selected[ip]; });
 
   var count = function(fn) { return cams.filter(fn).length; };
@@ -415,86 +532,99 @@ function render() {
   setText('kRun', count(function(c) { return c.busy; }));
   setText('kBad', count(function(c) { return c.status === 'offline' || c.status === 'error'; }));
 
-  var body = cams.length ? cams.map(camRow).join('') :
-    '<tr><td colspan="10" class="empty">Noch keine Kameras – über „＋ IPs eintragen“ die Liste einfügen.</td></tr>';
+  var body = cams.length ? cams.map(camRow).join('') : '<tr><td colspan="10" class="empty">' + esc(t('empty_cams')) + '</td></tr>';
   setHtml('camBody', body);
 
   var sel = selectedIps();
-  setText('selInfo', sel.length ? sel.length + ' ausgewählt' : cams.length + ' gesamt');
+  setText('selInfo', sel.length ? t('sel_info', sel.length) : t('total_info', cams.length));
   document.getElementById('selAll').checked = cams.length > 0 && sel.length === cams.length;
   document.getElementById('btnUpdateSel').disabled = !sel.length;
   document.getElementById('btnDeleteSel').disabled = !sel.length;
   document.getElementById('btnUpdateAvail').disabled = !availableIps().length;
-  document.getElementById('btnCheckAll').disabled = !cams.length;
   document.getElementById('btnUpdateAll').disabled = !idleIps().length;
+  document.getElementById('btnCheckAll').disabled = !cams.length;
 
   renderLog();
 }
 
 function camRow(c) {
-  var st = STATUS[c.status] || [c.status, ''];
-  var badge = '<span class="badge b-' + c.status + '">' + (st[1] === 'spin' ? '<span class="spinner"></span>' : '') + st[0] + '</span>';
+  var spin = c.status === 'checking' || c.status === 'updating';
+  var badge = '<span class="badge b-' + c.status + '">' + (spin ? '<span class="spinner"></span>' : '') + esc(t('st_' + c.status)) + '</span>';
   var bar = '';
   if (c.status === 'updating') {
     var known = typeof c.progress === 'number';
     bar = '<div class="bar' + (known ? '' : ' indeterminate') + '"><div class="fill" style="width:' + (known ? c.progress : 0) + '%"></div></div>';
   }
-  var detail = c.detail && c.status !== 'current' && c.status !== 'available' ? '<div class="status-detail">' + esc(c.detail) + '</div>' : '';
+  var showDetail = c.detail && c.status !== 'current' && c.status !== 'available';
+  var detail = showDetail ? '<div class="status-detail">' + esc(message(c.detail)) + '</div>' : '';
+  var dash = '<span class="muted">–</span>';
+  var avail = dash;
+  if (c.update_available) {
+    avail = '<span style="color:#c26100;" title="' + esc(t('title_reports') + (c.update_raw || c.update_available)) + '">' + esc(c.update_available) + '</span>';
+    if (c.update_raw && c.update_raw !== c.update_available) {
+      avail += '<div class="small muted" style="font-family:inherit; font-weight:400;">“' + esc(c.update_raw) + '”</div>';
+    }
+  }
+  var ip = esc(c.ip);
+  var dis = c.busy ? 'disabled' : '';
   return '<tr class="' + (selected[c.ip] ? 'selected' : '') + '">' +
-    '<td><input type="checkbox" ' + (selected[c.ip] ? 'checked' : '') + ' onclick="toggleSel(\'' + esc(c.ip) + '\', this.checked)"></td>' +
-    '<td class="mono"><a class="cam-link" href="http://' + esc(c.ip) + '/" target="_blank" rel="noopener" title="Weboberfläche der Kamera öffnen">' +
-      esc(c.ip) + '</a>' + (c.own_password ? ' <span title="eigenes Passwort">🔑</span>' : '') + '</td>' +
-    '<td>' + (c.name ? esc(c.name) : '<span class="muted">–</span>') + '</td>' +
+    '<td><input type="checkbox" ' + (selected[c.ip] ? 'checked' : '') + ' onclick="toggleSel(\'' + ip + '\', this.checked)"></td>' +
+    '<td class="mono"><a class="cam-link" href="http://' + ip + '/" target="_blank" rel="noopener" title="' + esc(t('title_open')) + '">' + ip + '</a>' +
+      (c.own_password ? ' <span title="' + esc(t('title_own_pw')) + '">🔑</span>' : '') + '</td>' +
+    '<td>' + (c.name ? esc(c.name) : dash) + '</td>' +
     '<td>' + badge + detail + bar + '</td>' +
-    '<td class="mono">' + (c.version ? esc(c.version) : '<span class="muted">–</span>') + '</td>' +
-    '<td class="mono">' + (c.update_available ? '<span style="color:#c26100;" title="Kamera meldet: ' + esc(c.update_raw || c.update_available) + '">' + esc(c.update_available) + '</span>' +
-      (c.update_raw && c.update_raw !== c.update_available ? '<div class="small muted" style="font-family:inherit; font-weight:400;">„' + esc(c.update_raw) + '“</div>' : '') : '<span class="muted">–</span>') + '</td>' +
-    '<td class="small">' + (c.serial ? esc(c.serial) : '<span class="muted">–</span>') + '</td>' +
+    '<td class="mono">' + (c.version ? esc(c.version) : dash) + '</td>' +
+    '<td class="mono">' + avail + '</td>' +
+    '<td class="small">' + (c.serial ? esc(c.serial) : dash) + '</td>' +
     '<td class="small">' + fmtTime(c.last_check) + '</td>' +
     '<td class="small">' + fmtTime(c.last_update) + '</td>' +
     '<td style="text-align:right; white-space:nowrap;">' +
-      '<button class="btn-icon" title="Prüfen" ' + (c.busy ? 'disabled' : '') + ' onclick="checkCams([\'' + esc(c.ip) + '\'])">🔍</button>' +
-      '<button class="btn-icon" title="Update" ' + (c.busy ? 'disabled' : '') + ' onclick="askUpdate([\'' + esc(c.ip) + '\'])">⬆</button>' +
-      '<button class="btn-icon" title="Entfernen" ' + (c.busy ? 'disabled' : '') + ' onclick="askDelete([\'' + esc(c.ip) + '\'])">✕</button>' +
+      '<button class="btn-icon" title="' + esc(t('title_check')) + '" ' + dis + ' onclick="checkCams([\'' + ip + '\'])">🔍</button>' +
+      '<button class="btn-icon" title="' + esc(t('title_update')) + '" ' + dis + ' onclick="askUpdate([\'' + ip + '\'])">⬆</button>' +
+      '<button class="btn-icon" title="' + esc(t('title_remove')) + '" ' + dis + ' onclick="askDelete([\'' + ip + '\'])">✕</button>' +
     '</td></tr>';
 }
 
 function renderLog() {
   var q = document.getElementById('logFilter').value.trim().toLowerCase();
   var rows = state.log.filter(function(e) {
-    return !q || Object.keys(e).some(function(k) { return String(e[k] || '').toLowerCase().indexOf(q) >= 0; });
+    if (!q) return true;
+    var res = RESULTS[e.result];
+    return Object.keys(e).some(function(k) { return String(e[k] || '').toLowerCase().indexOf(q) >= 0; }) ||
+      (res && t('res_' + res).toLowerCase().indexOf(q) >= 0);
   });
-  var ok = state.log.filter(function(e) { return e.ergebnis === 'erfolgreich'; }).length;
-  setText('logInfo', state.log.length + ' Einträge, davon ' + ok + ' erfolgreiche Updates');
+  var ok = state.log.filter(function(e) { return RESULTS[e.result] === 'success'; }).length;
+  setText('logInfo', t('log_info', state.log.length, ok));
   var html = rows.length ? rows.map(function(e) {
-    var cls = 'b-' + (e.ergebnis === 'bereits aktuell' ? 'aktuell' : e.ergebnis);
+    var res = RESULTS[e.result];
     return '<tr>' +
-      '<td class="small" style="white-space:nowrap;">' + fmtTime(e.zeit) + '</td>' +
+      '<td class="small" style="white-space:nowrap;">' + fmtTime(e.time) + '</td>' +
       '<td class="mono">' + esc(e.ip) + '</td>' +
       '<td>' + esc(e.name || '') + '</td>' +
-      '<td class="small">' + esc(e.seriennummer || '') + '</td>' +
-      '<td class="mono">' + esc(e.version_vorher || '–') + '</td>' +
-      '<td class="mono">' + esc(e.version_nachher || '–') + '</td>' +
-      '<td><span class="badge ' + cls + '">' + esc(e.ergebnis) + '</span></td>' +
-      '<td class="small">' + esc(e.meldung || '') + '</td></tr>';
-  }).join('') : '<tr><td colspan="8" class="empty">' + (q ? 'Keine Treffer.' : 'Noch keine Updates protokolliert.') + '</td></tr>';
+      '<td class="small">' + esc(e.serial || '') + '</td>' +
+      '<td class="mono">' + esc(e.version_before || '–') + '</td>' +
+      '<td class="mono">' + esc(e.version_after || '–') + '</td>' +
+      '<td><span class="badge b-res-' + (res || 'current') + '">' + esc(res ? t('res_' + res) : e.result || '') + '</span></td>' +
+      '<td class="small">' + esc(e.message || '') + '</td></tr>';
+  }).join('') : '<tr><td colspan="8" class="empty">' + esc(q ? t('no_match') : t('empty_log')) + '</td></tr>';
   setHtml('logBody', html);
 }
 
-function fmtTime(t) {
-  if (!t) return '<span class="muted">–</span>';
-  var m = String(t).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})/);
-  return m ? m[3] + '.' + m[2] + '.' + m[1] + ' ' + m[4] : esc(t);
+function fmtTime(v) {
+  if (!v) return '<span class="muted">–</span>';
+  var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})/);
+  if (!m) return esc(v);
+  return lang === 'de' ? m[3] + '.' + m[2] + '.' + m[1] + ' ' + m[4] : m[1] + '-' + m[2] + '-' + m[3] + ' ' + m[4];
 }
 
 function ipKey(ip) {
   return ip.split(/[.:]/).map(function(p) { return /^\d+$/.test(p) ? ('00000' + p).slice(-5) : p; }).join('.');
 }
 
-function setText(id, t) { var el = document.getElementById(id); if (el.innerText !== String(t)) el.innerText = t; }
+function setText(id, v) { var el = document.getElementById(id); if (el.innerText !== String(v)) el.innerText = v; }
 function setHtml(id, h) { var el = document.getElementById(id); if (el.innerHTML !== h) el.innerHTML = h; }
-function esc(t) {
-  return String(t).replace(/[&<>"']/g, function(c) {
+function esc(v) {
+  return String(v).replace(/[&<>"']/g, function(c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 }
@@ -503,13 +633,9 @@ function toast(msg) {
   var el = document.getElementById('toast');
   el.innerText = msg;
   el.classList.add('show');
-  clearTimeout(toast.t);
-  toast.t = setTimeout(function() { el.classList.remove('show'); }, 3500);
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(function() { el.classList.remove('show'); }, 3500);
 }
-
-// ==========================================
-// 3. AUSWAHL & AKTIONEN
-// ==========================================
 
 function allIps() { return state.cameras.map(function(c) { return c.ip; }); }
 function selectedIps() { return Object.keys(selected); }
@@ -521,27 +647,25 @@ function toggleAll(on) { selected = {}; if (on) allIps().forEach(function(ip) { 
 
 function checkCams(ips, quiet) {
   return post('/api/check', { ips: ips }).then(function(r) {
-    if (!quiet) toast(r.started.length + ' Kamera(s) werden geprüft');
+    if (!quiet) toast(t('t_checking', r.started.length));
     refresh();
   });
 }
 
 function askUpdate(ips) {
   if (!ips.length) return;
-  var names = ips.map(function(ip) {
+  document.getElementById('confirmTitle').innerText = t('update_title');
+  document.getElementById('confirmText').innerText = t('update_text', ips.length, state.settings.parallel || 3);
+  document.getElementById('confirmList').innerHTML = ips.map(function(ip) {
     var c = state.cameras.filter(function(x) { return x.ip === ip; })[0];
     return '<li><span class="mono">' + esc(ip) + '</span>' + (c && c.name ? ' – ' + esc(c.name) : '') + '</li>';
-  });
-  document.getElementById('confirmTitle').innerText = 'Update starten?';
-  document.getElementById('confirmText').innerText = ips.length + ' Kamera(s) werden geprüft und – falls verfügbar – auf die neueste Version aktualisiert. Bis zu ' +
-    (state.settings.parallel || 3) + ' gleichzeitig.';
-  document.getElementById('confirmList').innerHTML = names.join('');
+  }).join('');
   document.getElementById('confirmWarn').style.display = '';
-  document.getElementById('confirmOk').innerText = '⬆ Update starten';
+  document.getElementById('confirmOk').innerText = t('btn_start_update');
   document.getElementById('confirmOk').onclick = function() {
     closeDialog('confirmDialog');
     post('/api/update', { ips: ips }).then(function(r) {
-      toast(r.started.length + ' Update(s) gestartet');
+      toast(t('t_updates', r.started.length));
       selected = {};
       refresh();
     });
@@ -551,11 +675,11 @@ function askUpdate(ips) {
 
 function askDelete(ips) {
   if (!ips.length) return;
-  document.getElementById('confirmTitle').innerText = 'Kameras entfernen?';
-  document.getElementById('confirmText').innerText = ips.length + ' Kamera(s) werden aus der Liste entfernt. Das Protokoll bleibt erhalten.';
+  document.getElementById('confirmTitle').innerText = t('remove_title');
+  document.getElementById('confirmText').innerText = t('remove_text', ips.length);
   document.getElementById('confirmList').innerHTML = ips.map(function(ip) { return '<li class="mono">' + esc(ip) + '</li>'; }).join('');
   document.getElementById('confirmWarn').style.display = 'none';
-  document.getElementById('confirmOk').innerText = 'Entfernen';
+  document.getElementById('confirmOk').innerText = t('btn_remove');
   document.getElementById('confirmOk').onclick = function() {
     closeDialog('confirmDialog');
     post('/api/cameras/delete', { ips: ips }).then(function() { ips.forEach(function(ip) { delete selected[ip]; }); refresh(); });
@@ -568,12 +692,11 @@ function openAdd() { document.getElementById('addText').value = ''; openDialog('
 function addCams() {
   post('/api/cameras', { text: document.getElementById('addText').value }).then(function(r) {
     closeDialog('addDialog');
-    var msg = r.added + ' Kamera(s) hinzugefügt';
-    if (r.updated) msg += ', ' + r.updated + ' schon vorhanden';
-    if (r.invalid.length) msg += ' – ' + r.invalid.length + ' Zeile(n) nicht erkannt: ' + r.invalid.join(', ');
-    if (r.added) msg += '. Neue Kameras werden geprüft ...';
+    var msg = t('t_added', r.added);
+    if (r.updated) msg += t('t_existing', r.updated);
+    if (r.invalid.length) msg += t('t_invalid', r.invalid.length, r.invalid.join(', '));
+    if (r.added) msg += t('t_checking_new');
     toast(msg);
-    // Neue Kameras gleich prüfen (liest nur Version und verfügbares Update)
     if (r.added_ips && r.added_ips.length) checkCams(r.added_ips, true); else refresh();
   });
 }
@@ -582,12 +705,12 @@ function openSettings() {
   var s = state.settings;
   document.getElementById('sUser').value = s.user || '';
   document.getElementById('sPassword').value = '';
-  document.getElementById('sPwState').innerText = s.password_set ? 'Ein Passwort ist gespeichert.' : 'Noch kein Passwort gespeichert!';
+  document.getElementById('sPwState').innerText = s.password_set ? t('pw_set') : t('pw_missing');
   document.getElementById('sPort').value = s.port || '';
   document.getElementById('sPrefix').value = s.api_prefix || '';
   document.getElementById('sAuth').value = s.auth || 'basic';
   document.getElementById('sParallel').value = s.parallel || 3;
-  document.getElementById('sBody').value = s.perform_update_body || 'auto';
+  document.getElementById('sBody').value = s.perform_update_body || 'json';
   openDialog('settingsDialog');
 }
 
@@ -604,7 +727,7 @@ function saveSettings() {
   if (pw) data.password = pw;
   post('/api/settings', data).then(function() {
     closeDialog('settingsDialog');
-    toast('Einstellungen gespeichert');
+    toast(t('t_saved'));
     refresh();
   });
 }
@@ -615,6 +738,11 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') ['addDialog', 'confirmDialog', 'settingsDialog'].forEach(closeDialog);
 });
 
+(function() {
+  var saved = null;
+  try { saved = localStorage.getItem('lang'); } catch (e) {}
+  setLang(saved || ((navigator.language || '').toLowerCase().indexOf('de') === 0 ? 'de' : 'en'));
+})();
 poll();
 </script>
 </body>

@@ -1,3 +1,3 @@
 @echo off
-rem Startet das Kamera-Update-Tool im Demo-Modus (simulierte Kameras).
+rem Starts the camera update tool in demo mode (simulated cameras).
 call "%~dp0start.bat" --demo
