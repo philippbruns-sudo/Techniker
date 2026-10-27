@@ -111,7 +111,7 @@
     .b-offline { background-color: #edf2f7; color: #4a5568; }
     .b-error, .b-fehlgeschlagen { background-color: #f8d7da; color: #721c24; }
     .b-aktuell { background-color: #edf2f7; color: #4a5568; }
-    .status-detail { font-size: 12px; color: #64748b; margin-top: 4px; max-width: 320px; }
+    .status-detail { font-size: 12px; color: #64748b; margin-top: 4px; max-width: 420px; word-break: break-word; }
     .b-error + .status-detail, .b-offline + .status-detail { color: #c53030; }
     .bar { height: 5px; background-color: #f3e9e2; border-radius: 3px; margin-top: 6px; overflow: hidden; max-width: 200px; }
     .bar .fill { height: 100%; background-color: #ff6600; transition: width 0.4s; }
@@ -328,11 +328,14 @@
         <small>Änderung wirkt nach Neustart von server.py</small></div>
       <div class="field full"><label>Format perform_update</label>
         <select id="sBody">
-          <option value="text">Version als Text (text/plain)</option>
-          <option value="json">JSON {"version": "…"}</option>
+          <option value="text">Versionsnummer als Text – z. B. 4.12.0</option>
+          <option value="raw">Text von update_available unverändert</option>
+          <option value="json">JSON {"version": "4.12.0"}</option>
+          <option value="json_raw">JSON {"version": "&lt;Text von update_available&gt;"}</option>
           <option value="none">Ohne Inhalt</option>
         </select>
-        <small>Noch nicht an einer echten Kamera bestätigt – vor dem ersten Einsatz an einer Testkamera prüfen.</small></div>
+        <small>Noch nicht an einer echten Kamera bestätigt. Bei „HTTP 400“ nacheinander die Formate an einer Kamera probieren –
+          die Fehlermeldung zeigt jeweils, was gesendet wurde und was die Kamera antwortet.</small></div>
     </div>
     <div class="dialog-actions">
       <button class="btn btn-secondary" onclick="closeDialog('settingsDialog')">Abbrechen</button>
@@ -440,7 +443,8 @@ function camRow(c) {
     '<td>' + (c.name ? esc(c.name) : '<span class="muted">–</span>') + '</td>' +
     '<td>' + badge + detail + bar + '</td>' +
     '<td class="mono">' + (c.version ? esc(c.version) : '<span class="muted">–</span>') + '</td>' +
-    '<td class="mono">' + (c.update_available ? '<span style="color:#c26100;">' + esc(c.update_available) + '</span>' : '<span class="muted">–</span>') + '</td>' +
+    '<td class="mono">' + (c.update_available ? '<span style="color:#c26100;" title="Kamera meldet: ' + esc(c.update_raw || c.update_available) + '">' + esc(c.update_available) + '</span>' +
+      (c.update_raw && c.update_raw !== c.update_available ? '<div class="small muted" style="font-family:inherit; font-weight:400;">„' + esc(c.update_raw) + '“</div>' : '') : '<span class="muted">–</span>') + '</td>' +
     '<td class="small">' + (c.serial ? esc(c.serial) : '<span class="muted">–</span>') + '</td>' +
     '<td class="small">' + fmtTime(c.last_check) + '</td>' +
     '<td class="small">' + fmtTime(c.last_update) + '</td>' +

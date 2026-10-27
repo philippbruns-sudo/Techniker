@@ -35,7 +35,7 @@ DEFAULT_CONFIG = {
     'port': 577,
     'api_prefix': '/api/v2',
     'auth': 'basic',                 # basic | digest
-    'perform_update_body': 'text',   # text | json | none  (Format noch nicht verifiziert)
+    'perform_update_body': 'text',   # text | raw | json | json_raw | none  (siehe README)
     'parallel': 3,                   # wie viele Kameras gleichzeitig aktualisiert werden
     'timeout_s': 10,
     'update_timeout_min': 30,
@@ -99,7 +99,7 @@ def save_cameras():
 
 def new_camera(stored):
     c = {k: stored.get(k) for k in STORED_KEYS}
-    c.update({'status': 'idle', 'detail': '', 'progress': None, 'busy': False, 'online': None})
+    c.update({'status': 'idle', 'detail': '', 'progress': None, 'busy': False, 'online': None, 'update_raw': None})
     return c
 
 
@@ -168,7 +168,13 @@ class CameraClient:
         except urllib.error.HTTPError as e:
             if e.code == 401:
                 raise CameraError('Anmeldung abgelehnt (HTTP 401) – Passwort prüfen')
-            raise CameraError('%s %s: HTTP %s' % (method, path, e.code))
+            # Begründung der Kamera mit anzeigen, z. B. welcher Wert fehlt
+            try:
+                reason = e.read(400).decode('utf-8', 'replace').strip()
+            except Exception:
+                reason = ''
+            sent = ' | gesendet: %s' % (data.decode('utf-8', 'replace')[:80] if data else '(nichts)') if method == 'POST' else ''
+            raise CameraError('%s %s: HTTP %s%s%s' % (method, path, e.code, ' – Kamera: ' + reason if reason else '', sent))
         except (urllib.error.URLError, OSError) as e:
             raise CameraError('nicht erreichbar (%s)' % getattr(e, 'reason', e))
         try:
@@ -282,6 +288,10 @@ def check(ip):
     info = api.call('GET', '/system/info')
     current = info.get('version')
     avail = available_version(answer, current) or available_version(info.get('update_available'), current)
+    # Originaltext der Kamera, falls perform_update ihn unverändert braucht
+    raw = answer.get('update_available') if isinstance(answer, dict) else answer
+    raw = raw if available_version(raw, current) else info.get('update_available')
+    set_cam(ip, update_raw=str(raw).strip() if avail and raw else None)
     set_cam(ip, version=current, update_available=avail, last_check=now(),
             status='available' if avail else 'current',
             detail='Update auf %s verfügbar' % avail if avail else 'Aktuell')
@@ -323,8 +333,14 @@ def run_update(ip):
                 return
 
             set_cam(ip, status='updating', detail='Update auf %s wird gestartet ...' % avail, progress=0)
-            fmt = config['perform_update_body']
-            body = avail if fmt == 'text' else {'version': avail} if fmt == 'json' else None
+            raw = cameras[ip].get('update_raw') or avail
+            body = {
+                'text': avail,                   # 4.12.0
+                'raw': raw,                      # Text aus update_available, unverändert
+                'json': {'version': avail},
+                'json_raw': {'version': raw},
+                'none': None,
+            }.get(config['perform_update_body'], avail)
             api.call('POST', '/system/actions/perform_update', body)
 
             version = wait_for_update(ip, api, before, avail)
