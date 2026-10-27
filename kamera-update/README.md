@@ -23,7 +23,10 @@ python3 server.py --demo           # zum Ausprobieren mit simulierten Kameras
 python3 server.py --host 0.0.0.0   # auch von anderen Geräten im Netz erreichbar
 ```
 
-Unter Windows ggf. `py server.py` statt `python3 server.py`.
+Unter Windows geht es auch per Doppelklick: **`start.bat`** (echter Betrieb) bzw.
+**`start-demo.bat`** (Demo). Der Browser öffnet sich automatisch; zum Beenden das
+schwarze Fenster schließen. Voraussetzung ist ein installiertes Python 3 (python.org,
+beim Installieren „Add Python to PATH“ anhaken).
 
 Beim ersten Start unter **⚙ Einstellungen** das Kamera-Passwort eintragen.
 
@@ -94,6 +97,7 @@ Die Kameras brauchen dafür **Internetzugang** zum ARVOO-Server.
 | `server.py` | Server und Kamera-Logik | ✅ |
 | `index.html` | Oberfläche | ✅ |
 | `config.example.json` | Beispiel-Einstellungen | ✅ |
+| `start.bat`, `start-demo.bat` | Start per Doppelklick unter Windows | ✅ |
 | `config.json` | Einstellungen inkl. Passwort | ❌ (`.gitignore`) |
 | `data/` | Kameraliste und Protokoll | ❌ (`.gitignore`) |
 | `data-demo/` | Daten des Demo-Modus | ❌ (`.gitignore`) |
