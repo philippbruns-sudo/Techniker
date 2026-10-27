@@ -1,0 +1,7 @@
+# Enthält das Kamera-Passwort
+config.json
+
+# Kameraliste und Protokoll
+data/
+data-demo/
+__pycache__/

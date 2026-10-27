@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smart Parking - Kamera-Update</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      background-color: #fcfbfa;
+      margin: 0;
+      padding: 16px;
+      color: #333;
+    }
+    .app-container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(255, 102, 0, 0.08);
+      max-width: 1500px;
+      margin: 0 auto;
+      overflow: hidden;
+      border-top: 5px solid #ff6600;
+    }
+    .app-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 28px; border-bottom: 1px solid #f3e9e2;
+    }
+    .logo { max-width: 180px; height: auto; }
+    .logo-fallback { font-weight: 700; color: #002d56; font-size: 20px; display: none; }
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    .header-title { text-align: right; }
+    .header-title h1 { margin: 0; font-size: 18px; color: #002d56; }
+    .header-title .subtitle { font-size: 13px; color: #64748b; }
+    .demo-tag { background-color: #ff6600; color: white; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; margin-left: 8px; }
+    .app-body { padding: 24px 28px 28px 28px; }
+
+    /* ---------- Kennzahlen ---------- */
+    .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px; }
+    .kpi {
+      border-radius: 12px; padding: 14px 18px;
+      background-color: #fdfaf7; border-left: 4px solid #cbd5e1;
+    }
+    .kpi h4 { margin: 0; font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .kpi p { margin: 4px 0 0 0; font-size: 28px; font-weight: 700; color: #002d56; }
+    .kpi.total { background-color: #002d56; border-left-color: #ff6600; }
+    .kpi.total h4 { color: #cbd5e1; }
+    .kpi.total p { color: #ff6600; }
+    .kpi.ok { border-left-color: #4caf50; }
+    .kpi.avail { border-left-color: #ff6600; }
+    .kpi.run { border-left-color: #185a9d; }
+    .kpi.bad { border-left-color: #e53e3e; }
+
+    /* ---------- Karten / Abschnitte ---------- */
+    .section { margin-bottom: 28px; }
+    .section-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+    .section-head h2 { margin: 0; font-size: 18px; color: #002d56; }
+    .section-head h2 small { font-size: 13px; color: #94a3b8; font-weight: 500; margin-left: 6px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 16px; border-radius: 8px; border: none;
+      font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
+      transition: background-color 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .btn-primary { background-color: #ff6600; color: white; box-shadow: 0 4px 10px rgba(255, 102, 0, 0.15); }
+    .btn-primary:hover { background-color: #e65c00; }
+    .btn-navy { background-color: #002d56; color: white; }
+    .btn-navy:hover { background-color: #013b70; }
+    .btn-secondary { background-color: white; color: #002d56; border: 2px solid #cbd5e1; padding: 8px 14px; }
+    .btn-secondary:hover { border-color: #002d56; }
+    .btn-danger { background-color: white; color: #c53030; border: 2px solid #fed7d7; padding: 8px 14px; }
+    .btn-danger:hover { border-color: #e53e3e; }
+    .btn:disabled { background-color: #e2e8f0 !important; color: #94a3b8 !important; border-color: #e2e8f0 !important; cursor: not-allowed; box-shadow: none !important; }
+    .btn-icon { background: none; border: none; cursor: pointer; font-size: 15px; padding: 6px 8px; border-radius: 6px; color: #64748b; }
+    .btn-icon:hover { background-color: #f3e9e2; color: #002d56; }
+    .btn-icon:disabled { opacity: 0.3; cursor: not-allowed; background: none; }
+
+    /* ---------- Tabellen ---------- */
+    .table-wrap { border: 2px solid #f3e9e2; border-radius: 10px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th {
+      text-align: left; padding: 10px 12px; background-color: #fdfaf7;
+      color: #ff6600; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;
+      border-bottom: 2px solid #f3e9e2; white-space: nowrap;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid #f3e9e2; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background-color: #fffcf8; }
+    tr.selected { background-color: #fffaf0 !important; }
+    .mono { font-family: Consolas, 'Courier New', monospace; font-weight: 600; color: #002d56; }
+    .muted { color: #94a3b8; }
+    .small { font-size: 12px; }
+    .empty { text-align: center; padding: 30px; color: #94a3b8; }
+    input[type="checkbox"] { width: 17px; height: 17px; accent-color: #ff6600; cursor: pointer; }
+
+    /* ---------- Status-Anzeige ---------- */
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; white-space: nowrap;
+    }
+    .b-idle { background-color: #edf2f7; color: #64748b; }
+    .b-checking, .b-queued { background-color: #e2f0fe; color: #185a9d; }
+    .b-current, .b-erfolgreich { background-color: #d4edda; color: #155724; }
+    .b-available { background-color: #fff1e6; color: #c26100; }
+    .b-updating { background-color: #ff6600; color: white; }
+    .b-offline { background-color: #edf2f7; color: #4a5568; }
+    .b-error, .b-fehlgeschlagen { background-color: #f8d7da; color: #721c24; }
+    .b-aktuell { background-color: #edf2f7; color: #4a5568; }
+    .status-detail { font-size: 12px; color: #64748b; margin-top: 4px; max-width: 320px; }
+    .b-error + .status-detail, .b-offline + .status-detail { color: #c53030; }
+    .bar { height: 5px; background-color: #f3e9e2; border-radius: 3px; margin-top: 6px; overflow: hidden; max-width: 200px; }
+    .bar .fill { height: 100%; background-color: #ff6600; transition: width 0.4s; }
+    .bar.indeterminate .fill { width: 35% !important; animation: slide 1.2s ease-in-out infinite; }
+    @keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+    .spinner {
+      width: 11px; height: 11px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.4); border-top-color: currentColor;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .filter {
+      padding: 9px 12px; border: 2px solid #f3e9e2; border-radius: 8px;
+      font-size: 14px; font-family: inherit; min-width: 240px; background-color: #fdfdfd;
+    }
+    .filter:focus, textarea:focus, .field input:focus, .field select:focus { border-color: #ff6600; outline: none; }
+
+    /* ---------- Dialoge ---------- */
+    .dimmer {
+      position: fixed; inset: 0; background-color: rgba(0,0,0,0.6);
+      z-index: 999; display: none; justify-content: center; align-items: center;
+      padding: 20px; box-sizing: border-box;
+    }
+    .dimmer.show { display: flex; }
+    .dialog {
+      background: white; border-radius: 16px; border-top: 5px solid #ff6600;
+      max-width: 560px; width: 100%; padding: 24px; box-sizing: border-box;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .dialog h3 { margin: 0 0 8px 0; color: #002d56; }
+    .dialog p { margin: 0 0 14px 0; color: #4a5568; font-size: 14px; line-height: 1.5; }
+    .dialog textarea {
+      width: 100%; min-height: 180px; box-sizing: border-box;
+      padding: 12px; border: 2px solid #f3e9e2; border-radius: 8px;
+      font-family: Consolas, 'Courier New', monospace; font-size: 14px; resize: vertical;
+    }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .hint { background-color: #fdfaf7; border-left: 4px solid #ff6600; border-radius: 6px; padding: 10px 12px; font-size: 13px; color: #4a5568; margin-bottom: 14px; }
+    .hint code { background: #f3e9e2; padding: 1px 5px; border-radius: 4px; }
+    .warn { background-color: #fff5f5; border-left-color: #e53e3e; color: #721c24; }
+    .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .field label { display: block; margin-bottom: 6px; font-weight: 600; color: #ff6600; font-size: 13px; }
+    .field input, .field select {
+      width: 100%; box-sizing: border-box; padding: 10px; border: 2px solid #f3e9e2; border-radius: 8px;
+      font-size: 14px; font-family: inherit; background-color: #fdfdfd;
+    }
+    .field small { display: block; margin-top: 4px; color: #94a3b8; font-size: 12px; }
+    .field.full { grid-column: span 2; }
+    .confirm-list { max-height: 200px; overflow-y: auto; margin: 0 0 10px 0; padding-left: 20px; font-size: 14px; color: #002d56; }
+
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px);
+      background-color: #002d56; color: white; padding: 12px 20px; border-radius: 10px;
+      font-size: 14px; font-weight: 600; box-shadow: 0 8px 25px rgba(0, 45, 86, 0.3);
+      transition: transform 0.3s, opacity 0.3s; z-index: 1000;
+      opacity: 0; pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .offline-banner { display: none; background-color: #f8d7da; color: #721c24; padding: 10px 28px; font-weight: 600; font-size: 14px; }
+    .offline-banner.show { display: block; }
+
+    @media (max-width: 900px) {
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+      .fields { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+      .app-body { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+  <div class="app-header">
+    <img src="https://www.smartparking.com/wp-content/uploads/2025/04/logo.svg" alt="Smart Parking Logo" class="logo"
+         onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='block';">
+    <div id="logoFallback" class="logo-fallback">Smart Parking</div>
+    <div class="header-right">
+      <button class="btn btn-secondary" onclick="openSettings()">⚙ Einstellungen</button>
+      <div class="header-title">
+        <h1>Kamera-Update<span id="demoTag" class="demo-tag" style="display:none;">DEMO</span></h1>
+        <span class="subtitle">ARVOO Ruby</span>
+      </div>
+    </div>
+  </div>
+  <div class="offline-banner" id="offlineBanner">Keine Verbindung zum Update-Server (server.py läuft nicht?) – neuer Versuch läuft ...</div>
+
+  <div class="app-body">
+
+    <div class="kpis">
+      <div class="kpi total"><h4>Kameras</h4><p id="kTotal">0</p></div>
+      <div class="kpi ok"><h4>Aktuell</h4><p id="kOk">0</p></div>
+      <div class="kpi avail"><h4>Update verfügbar</h4><p id="kAvail">0</p></div>
+      <div class="kpi run"><h4>Läuft gerade</h4><p id="kRun">0</p></div>
+      <div class="kpi bad"><h4>Offline / Fehler</h4><p id="kBad">0</p></div>
+    </div>
+
+    <!-- Kameraliste -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Kameras <small id="selInfo"></small></h2>
+        <div class="toolbar">
+          <button class="btn btn-secondary" onclick="openAdd()">＋ Kameras hinzufügen</button>
+          <button class="btn btn-navy" id="btnCheckAll" onclick="checkCams(allIps())">🔍 Alle prüfen</button>
+          <button class="btn btn-primary" id="btnUpdateSel" onclick="askUpdate(selectedIps())">⬆ Ausgewählte aktualisieren</button>
+          <button class="btn btn-primary" id="btnUpdateAvail" onclick="askUpdate(availableIps())">⬆ Alle mit Update aktualisieren</button>
+          <button class="btn btn-danger" id="btnDeleteSel" onclick="askDelete(selectedIps())">Entfernen</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:30px;"><input type="checkbox" id="selAll" onclick="toggleAll(this.checked)"></th>
+              <th>IP-Adresse</th>
+              <th>Name / Standort</th>
+              <th>Status</th>
+              <th>Version</th>
+              <th>Verfügbar</th>
+              <th>Seriennummer</th>
+              <th>Zuletzt geprüft</th>
+              <th>Letztes Update</th>
+              <th style="width:110px;"></th>
+            </tr>
+          </thead>
+          <tbody id="camBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Protokoll -->
+    <div class="section" style="margin-bottom:0;">
+      <div class="section-head">
+        <h2>Update-Protokoll <small id="logInfo"></small></h2>
+        <div class="toolbar">
+          <input class="filter" id="logFilter" placeholder="Filtern nach IP, Name, Version ..." oninput="renderLog()">
+          <a class="btn btn-secondary" href="/api/log.csv" download style="text-decoration:none;">⬇ CSV herunterladen</a>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Zeitpunkt</th>
+              <th>IP-Adresse</th>
+              <th>Name / Standort</th>
+              <th>Seriennummer</th>
+              <th>Vorher</th>
+              <th>Nachher</th>
+              <th>Ergebnis</th>
+              <th>Meldung</th>
+            </tr>
+          </thead>
+          <tbody id="logBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Dialog: Kameras hinzufügen -->
+<div class="dimmer" id="addDialog">
+  <div class="dialog">
+    <h3>Kameras hinzufügen</h3>
+    <p>Eine Kamera pro Zeile. Der Name ist optional, ein eigenes Passwort nur nötig, wenn es vom Standard abweicht.
+      Ist eine IP schon in der Liste, werden Name bzw. Passwort aktualisiert.</p>
+    <div class="hint">
+      <code>10.32.47.135</code><br>
+      <code>10.32.47.135 Parkhaus Nord</code><br>
+      <code>10.32.47.135; Parkhaus Nord; Passwort</code> &nbsp;(eigenes Passwort)<br>
+      <code>10.32.47.135; Parkhaus Nord;</code> &nbsp;(wieder Standardpasswort)<br>
+      <code>10.32.47.135:577</code> &nbsp;(anderer Port)
+    </div>
+    <textarea id="addText" placeholder="10.32.47.131 Parkhaus Nord&#10;10.32.47.132 Parkhaus Nord&#10;10.32.47.135 Einfahrt Süd"></textarea>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" onclick="closeDialog('addDialog')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="addCams()">Hinzufügen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dialog: Update bestätigen -->
+<div class="dimmer" id="confirmDialog">
+  <div class="dialog">
+    <h3 id="confirmTitle">Update starten?</h3>
+    <p id="confirmText"></p>
+    <ul class="confirm-list" id="confirmList"></ul>
+    <div class="hint warn" id="confirmWarn">Die Kameras laden die neueste Firmware vom ARVOO-Server und starten neu.
+      Während des Updates liefern sie keine Kennzeichen-Ergebnisse.</div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" onclick="closeDialog('confirmDialog')">Abbrechen</button>
+      <button class="btn btn-primary" id="confirmOk">Starten</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dialog: Einstellungen -->
+<div class="dimmer" id="settingsDialog">
+  <div class="dialog">
+    <h3>Einstellungen</h3>
+    <p>Gelten für alle Kameras ohne eigenes Passwort. Werden in <code>config.json</code> neben <code>server.py</code> gespeichert.</p>
+    <div class="fields">
+      <div class="field"><label>Benutzer</label><input id="sUser"></div>
+      <div class="field"><label>Passwort</label><input id="sPassword" type="password" placeholder="unverändert"><small id="sPwState"></small></div>
+      <div class="field"><label>Port</label><input id="sPort" type="number"></div>
+      <div class="field"><label>API-Pfad</label><input id="sPrefix"></div>
+      <div class="field"><label>Anmeldung</label>
+        <select id="sAuth"><option value="basic">Basic</option><option value="digest">Digest</option></select></div>
+      <div class="field"><label>Gleichzeitige Updates</label><input id="sParallel" type="number" min="1" max="20">
+        <small>Änderung wirkt nach Neustart von server.py</small></div>
+      <div class="field full"><label>Format perform_update</label>
+        <select id="sBody">
+          <option value="text">Version als Text (text/plain)</option>
+          <option value="json">JSON {"version": "…"}</option>
+          <option value="none">Ohne Inhalt</option>
+        </select>
+        <small>Noch nicht an einer echten Kamera bestätigt – vor dem ersten Einsatz an einer Testkamera prüfen.</small></div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" onclick="closeDialog('settingsDialog')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/*
+ * Oberfläche für server.py. Fragt alle 2 Sekunden GET /api/state ab.
+ * Aktionen: POST /api/cameras, /api/cameras/delete, /api/check, /api/update, /api/settings.
+ */
+
+var POLL_MS = 2000;
+var state = { cameras: [], log: [], settings: {} };
+var selected = {};
+
+var STATUS = {
+  idle:      ['Nicht geprüft', ''],
+  checking:  ['Prüft', 'spin'],
+  queued:    ['Wartet', ''],
+  current:   ['Aktuell', ''],
+  available: ['Update verfügbar', ''],
+  updating:  ['Update läuft', 'spin'],
+  offline:   ['Offline', ''],
+  error:     ['Fehler', '']
+};
+
+// ==========================================
+// 1. SERVER
+// ==========================================
+
+function post(url, data) {
+  return fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data || {})
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  });
+}
+
+function refresh() {
+  return fetch('/api/state', { cache: 'no-store' })
+    .then(function(r) { return r.json(); })
+    .then(function(s) {
+      state = s;
+      document.getElementById('offlineBanner').classList.remove('show');
+      render();
+    })
+    .catch(function() { document.getElementById('offlineBanner').classList.add('show'); });
+}
+
+function poll() { refresh().then(function() { setTimeout(poll, POLL_MS); }); }
+
+// ==========================================
+// 2. ANZEIGE
+// ==========================================
+
+function render() {
+  document.getElementById('demoTag').style.display = state.demo ? 'inline' : 'none';
+  var cams = state.cameras.slice().sort(function(a, b) { return ipKey(a.ip).localeCompare(ipKey(b.ip)); });
+
+  // Auswahl auf vorhandene Kameras beschränken
+  Object.keys(selected).forEach(function(ip) { if (!cams.some(function(c) { return c.ip === ip; })) delete selected[ip]; });
+
+  var count = function(fn) { return cams.filter(fn).length; };
+  setText('kTotal', cams.length);
+  setText('kOk', count(function(c) { return c.status === 'current'; }));
+  setText('kAvail', count(function(c) { return c.status === 'available'; }));
+  setText('kRun', count(function(c) { return c.busy; }));
+  setText('kBad', count(function(c) { return c.status === 'offline' || c.status === 'error'; }));
+
+  var body = cams.length ? cams.map(camRow).join('') :
+    '<tr><td colspan="10" class="empty">Noch keine Kameras – über „＋ Kameras hinzufügen“ IP-Adressen eintragen.</td></tr>';
+  setHtml('camBody', body);
+
+  var sel = selectedIps();
+  setText('selInfo', sel.length ? sel.length + ' ausgewählt' : cams.length + ' gesamt');
+  document.getElementById('selAll').checked = cams.length > 0 && sel.length === cams.length;
+  document.getElementById('btnUpdateSel').disabled = !sel.length;
+  document.getElementById('btnDeleteSel').disabled = !sel.length;
+  document.getElementById('btnUpdateAvail').disabled = !availableIps().length;
+  document.getElementById('btnCheckAll').disabled = !cams.length;
+
+  renderLog();
+}
+
+function camRow(c) {
+  var st = STATUS[c.status] || [c.status, ''];
+  var badge = '<span class="badge b-' + c.status + '">' + (st[1] === 'spin' ? '<span class="spinner"></span>' : '') + st[0] + '</span>';
+  var bar = '';
+  if (c.status === 'updating') {
+    var known = typeof c.progress === 'number';
+    bar = '<div class="bar' + (known ? '' : ' indeterminate') + '"><div class="fill" style="width:' + (known ? c.progress : 0) + '%"></div></div>';
+  }
+  var detail = c.detail && c.status !== 'current' && c.status !== 'available' ? '<div class="status-detail">' + esc(c.detail) + '</div>' : '';
+  return '<tr class="' + (selected[c.ip] ? 'selected' : '') + '">' +
+    '<td><input type="checkbox" ' + (selected[c.ip] ? 'checked' : '') + ' onclick="toggleSel(\'' + esc(c.ip) + '\', this.checked)"></td>' +
+    '<td class="mono">' + esc(c.ip) + (c.own_password ? ' <span title="eigenes Passwort">🔑</span>' : '') + '</td>' +
+    '<td>' + (c.name ? esc(c.name) : '<span class="muted">–</span>') + '</td>' +
+    '<td>' + badge + detail + bar + '</td>' +
+    '<td class="mono">' + (c.version ? esc(c.version) : '<span class="muted">–</span>') + '</td>' +
+    '<td class="mono">' + (c.update_available ? '<span style="color:#c26100;">' + esc(c.update_available) + '</span>' : '<span class="muted">–</span>') + '</td>' +
+    '<td class="small">' + (c.serial ? esc(c.serial) : '<span class="muted">–</span>') + '</td>' +
+    '<td class="small">' + fmtTime(c.last_check) + '</td>' +
+    '<td class="small">' + fmtTime(c.last_update) + '</td>' +
+    '<td style="text-align:right; white-space:nowrap;">' +
+      '<button class="btn-icon" title="Prüfen" ' + (c.busy ? 'disabled' : '') + ' onclick="checkCams([\'' + esc(c.ip) + '\'])">🔍</button>' +
+      '<button class="btn-icon" title="Update" ' + (c.busy ? 'disabled' : '') + ' onclick="askUpdate([\'' + esc(c.ip) + '\'])">⬆</button>' +
+      '<button class="btn-icon" title="Entfernen" ' + (c.busy ? 'disabled' : '') + ' onclick="askDelete([\'' + esc(c.ip) + '\'])">✕</button>' +
+    '</td></tr>';
+}
+
+function renderLog() {
+  var q = document.getElementById('logFilter').value.trim().toLowerCase();
+  var rows = state.log.filter(function(e) {
+    return !q || Object.keys(e).some(function(k) { return String(e[k] || '').toLowerCase().indexOf(q) >= 0; });
+  });
+  var ok = state.log.filter(function(e) { return e.ergebnis === 'erfolgreich'; }).length;
+  setText('logInfo', state.log.length + ' Einträge, davon ' + ok + ' erfolgreiche Updates');
+  var html = rows.length ? rows.map(function(e) {
+    var cls = 'b-' + (e.ergebnis === 'bereits aktuell' ? 'aktuell' : e.ergebnis);
+    return '<tr>' +
+      '<td class="small" style="white-space:nowrap;">' + fmtTime(e.zeit) + '</td>' +
+      '<td class="mono">' + esc(e.ip) + '</td>' +
+      '<td>' + esc(e.name || '') + '</td>' +
+      '<td class="small">' + esc(e.seriennummer || '') + '</td>' +
+      '<td class="mono">' + esc(e.version_vorher || '–') + '</td>' +
+      '<td class="mono">' + esc(e.version_nachher || '–') + '</td>' +
+      '<td><span class="badge ' + cls + '">' + esc(e.ergebnis) + '</span></td>' +
+      '<td class="small">' + esc(e.meldung || '') + '</td></tr>';
+  }).join('') : '<tr><td colspan="8" class="empty">' + (q ? 'Keine Treffer.' : 'Noch keine Updates protokolliert.') + '</td></tr>';
+  setHtml('logBody', html);
+}
+
+function fmtTime(t) {
+  if (!t) return '<span class="muted">–</span>';
+  var m = String(t).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})/);
+  return m ? m[3] + '.' + m[2] + '.' + m[1] + ' ' + m[4] : esc(t);
+}
+
+function ipKey(ip) {
+  return ip.split(/[.:]/).map(function(p) { return /^\d+$/.test(p) ? ('00000' + p).slice(-5) : p; }).join('.');
+}
+
+function setText(id, t) { var el = document.getElementById(id); if (el.innerText !== String(t)) el.innerText = t; }
+function setHtml(id, h) { var el = document.getElementById(id); if (el.innerHTML !== h) el.innerHTML = h; }
+function esc(t) {
+  return String(t).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function toast(msg) {
+  var el = document.getElementById('toast');
+  el.innerText = msg;
+  el.classList.add('show');
+  clearTimeout(toast.t);
+  toast.t = setTimeout(function() { el.classList.remove('show'); }, 3500);
+}
+
+// ==========================================
+// 3. AUSWAHL & AKTIONEN
+// ==========================================
+
+function allIps() { return state.cameras.map(function(c) { return c.ip; }); }
+function selectedIps() { return Object.keys(selected); }
+function availableIps() { return state.cameras.filter(function(c) { return c.status === 'available' && !c.busy; }).map(function(c) { return c.ip; }); }
+
+function toggleSel(ip, on) { if (on) selected[ip] = true; else delete selected[ip]; render(); }
+function toggleAll(on) { selected = {}; if (on) allIps().forEach(function(ip) { selected[ip] = true; }); render(); }
+
+function checkCams(ips) {
+  post('/api/check', { ips: ips }).then(function(r) {
+    toast(r.started.length + ' Kamera(s) werden geprüft');
+    refresh();
+  });
+}
+
+function askUpdate(ips) {
+  if (!ips.length) return;
+  var names = ips.map(function(ip) {
+    var c = state.cameras.filter(function(x) { return x.ip === ip; })[0];
+    return '<li><span class="mono">' + esc(ip) + '</span>' + (c && c.name ? ' – ' + esc(c.name) : '') + '</li>';
+  });
+  document.getElementById('confirmTitle').innerText = 'Update starten?';
+  document.getElementById('confirmText').innerText = ips.length + ' Kamera(s) werden geprüft und – falls verfügbar – auf die neueste Version aktualisiert. Bis zu ' +
+    (state.settings.parallel || 3) + ' gleichzeitig.';
+  document.getElementById('confirmList').innerHTML = names.join('');
+  document.getElementById('confirmWarn').style.display = '';
+  document.getElementById('confirmOk').innerText = '⬆ Update starten';
+  document.getElementById('confirmOk').onclick = function() {
+    closeDialog('confirmDialog');
+    post('/api/update', { ips: ips }).then(function(r) {
+      toast(r.started.length + ' Update(s) gestartet');
+      selected = {};
+      refresh();
+    });
+  };
+  openDialog('confirmDialog');
+}
+
+function askDelete(ips) {
+  if (!ips.length) return;
+  document.getElementById('confirmTitle').innerText = 'Kameras entfernen?';
+  document.getElementById('confirmText').innerText = ips.length + ' Kamera(s) werden aus der Liste entfernt. Das Protokoll bleibt erhalten.';
+  document.getElementById('confirmList').innerHTML = ips.map(function(ip) { return '<li class="mono">' + esc(ip) + '</li>'; }).join('');
+  document.getElementById('confirmWarn').style.display = 'none';
+  document.getElementById('confirmOk').innerText = 'Entfernen';
+  document.getElementById('confirmOk').onclick = function() {
+    closeDialog('confirmDialog');
+    post('/api/cameras/delete', { ips: ips }).then(function() { ips.forEach(function(ip) { delete selected[ip]; }); refresh(); });
+  };
+  openDialog('confirmDialog');
+}
+
+function openAdd() { document.getElementById('addText').value = ''; openDialog('addDialog'); document.getElementById('addText').focus(); }
+
+function addCams() {
+  post('/api/cameras', { text: document.getElementById('addText').value }).then(function(r) {
+    closeDialog('addDialog');
+    toast(r.added + ' Kamera(s) hinzugefügt' + (r.invalid.length ? ', ' + r.invalid.length + ' Zeile(n) ungültig: ' + r.invalid.join(', ') : ''));
+    refresh();
+  });
+}
+
+function openSettings() {
+  var s = state.settings;
+  document.getElementById('sUser').value = s.user || '';
+  document.getElementById('sPassword').value = '';
+  document.getElementById('sPwState').innerText = s.password_set ? 'Ein Passwort ist gespeichert.' : 'Noch kein Passwort gespeichert!';
+  document.getElementById('sPort').value = s.port || '';
+  document.getElementById('sPrefix').value = s.api_prefix || '';
+  document.getElementById('sAuth').value = s.auth || 'basic';
+  document.getElementById('sParallel').value = s.parallel || 3;
+  document.getElementById('sBody').value = s.perform_update_body || 'text';
+  openDialog('settingsDialog');
+}
+
+function saveSettings() {
+  var data = {
+    user: document.getElementById('sUser').value,
+    port: document.getElementById('sPort').value,
+    api_prefix: document.getElementById('sPrefix').value,
+    auth: document.getElementById('sAuth').value,
+    parallel: document.getElementById('sParallel').value,
+    perform_update_body: document.getElementById('sBody').value
+  };
+  var pw = document.getElementById('sPassword').value;
+  if (pw) data.password = pw;
+  post('/api/settings', data).then(function() {
+    closeDialog('settingsDialog');
+    toast('Einstellungen gespeichert');
+    refresh();
+  });
+}
+
+function openDialog(id) { document.getElementById(id).classList.add('show'); }
+function closeDialog(id) { document.getElementById(id).classList.remove('show'); }
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') ['addDialog', 'confirmDialog', 'settingsDialog'].forEach(closeDialog);
+});
+
+poll();
+</script>
+</body>
+</html>

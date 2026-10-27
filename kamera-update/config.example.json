@@ -1,0 +1,11 @@
+{
+  "user": "user",
+  "password": "",
+  "port": 577,
+  "api_prefix": "/api/v2",
+  "auth": "basic",
+  "perform_update_body": "text",
+  "parallel": 3,
+  "timeout_s": 10,
+  "update_timeout_min": 30
+}
