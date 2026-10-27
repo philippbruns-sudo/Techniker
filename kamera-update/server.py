@@ -21,6 +21,7 @@ import re
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -35,7 +36,7 @@ DEFAULT_CONFIG = {
     'port': 577,
     'api_prefix': '/api/v2',
     'auth': 'basic',                 # basic | digest
-    'perform_update_body': 'text',   # text | raw | json | json_raw | none  (siehe README)
+    'perform_update_body': 'auto',   # auto oder ein Format aus UPDATE_FORMATS (siehe README)
     'parallel': 3,                   # wie viele Kameras gleichzeitig aktualisiert werden
     'timeout_s': 10,
     'update_timeout_min': 30,
@@ -130,7 +131,9 @@ def now():
 # ==========================================
 
 class CameraError(Exception):
-    pass
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
 
 
 class CameraClient:
@@ -149,7 +152,7 @@ class CameraClient:
         else:
             self.opener = urllib.request.build_opener()
 
-    def call(self, method, path, body=None):
+    def call(self, method, path, body=None, content_type=None):
         headers = {}
         data = None
         if config['auth'] != 'digest':
@@ -160,7 +163,7 @@ class CameraClient:
             headers['Content-Type'] = 'application/json'
         elif body is not None:
             data = str(body).encode()
-            headers['Content-Type'] = 'text/plain'
+            headers['Content-Type'] = content_type or 'text/plain'
         req = urllib.request.Request(self.base + path, data=data, method=method, headers=headers)
         try:
             with self.opener.open(req, timeout=self.timeout) as res:
@@ -174,7 +177,10 @@ class CameraClient:
             except Exception:
                 reason = ''
             sent = ' | gesendet: %s' % (data.decode('utf-8', 'replace')[:80] if data else '(nichts)') if method == 'POST' else ''
-            raise CameraError('%s %s: HTTP %s%s%s' % (method, path, e.code, ' – Kamera: ' + reason if reason else '', sent))
+            if reason.lstrip().startswith('<'):
+                # HTML-Fehlerseite (Flask): nur den Text behalten
+                reason = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', re.sub(r'<title>.*?</title>', '', reason, flags=re.S))).strip()
+            raise CameraError('%s %s: HTTP %s%s%s' % (method, path, e.code, ' – Kamera: ' + reason if reason else '', sent), e.code)
         except (urllib.error.URLError, OSError) as e:
             raise CameraError('nicht erreichbar (%s)' % getattr(e, 'reason', e))
         try:
@@ -203,7 +209,8 @@ class FakeCamera:
             }
         self.s = FakeCamera.state[ip]
 
-    def call(self, method, path, body=None):
+    def call(self, method, path, body=None, content_type=None):
+        path = path.split('?')[0]
         s = self.s
         time.sleep(random.uniform(0.2, 0.6))
         if s['offline']:
@@ -334,14 +341,8 @@ def run_update(ip):
 
             set_cam(ip, status='updating', detail='Update auf %s wird gestartet ...' % avail, progress=0)
             raw = cameras[ip].get('update_raw') or avail
-            body = {
-                'text': avail,                   # 4.12.0
-                'raw': raw,                      # Text aus update_available, unverändert
-                'json': {'version': avail},
-                'json_raw': {'version': raw},
-                'none': None,
-            }.get(config['perform_update_body'], avail)
-            api.call('POST', '/system/actions/perform_update', body)
+            fmt = perform_update(ip, api, avail, raw)
+            entry['meldung'] = 'Format: %s' % fmt
 
             version = wait_for_update(ip, api, before, avail)
             entry.update(version_nachher=version, ergebnis='erfolgreich')
@@ -355,6 +356,72 @@ def run_update(ip):
             write_log(entry)
             set_cam(ip, busy=False)
             save_cameras()
+
+
+# Mögliche Formate für perform_update – die Doku zeigt den Inhalt nicht.
+# Reihenfolge = Reihenfolge im Automatik-Modus.
+UPDATE_FORMATS = [
+    ('json',        'JSON {"version": "4.12.0"}'),
+    ('json_string', 'JSON-Text "4.12.0"'),
+    ('form',        'Formularfeld version=4.12.0'),
+    ('query',       'Adresse ?version=4.12.0'),
+    ('json_raw',    'JSON {"version": "<Originaltext>"}'),
+    ('text',        'Text 4.12.0'),
+    ('raw',         'Originaltext unverändert'),
+    ('none',        'ohne Inhalt'),
+]
+
+
+def send_perform_update(api, fmt, version, raw):
+    answer = _send_perform_update(api, fmt, version, raw)
+    if isinstance(answer, dict) and answer.get('success') is False:
+        raise CameraError('perform_update: Kamera meldet success = false (%s)' % json.dumps(answer, ensure_ascii=False)[:150], 400)
+    return answer
+
+
+def _send_perform_update(api, fmt, version, raw):
+    path = '/system/actions/perform_update'
+    if fmt == 'json':
+        return api.call('POST', path, {'version': version})
+    if fmt == 'json_raw':
+        return api.call('POST', path, {'version': raw})
+    if fmt == 'json_string':
+        return api.call('POST', path, json.dumps(version), 'application/json')
+    if fmt == 'form':
+        return api.call('POST', path, urllib.parse.urlencode({'version': version}), 'application/x-www-form-urlencoded')
+    if fmt == 'query':
+        return api.call('POST', path + '?' + urllib.parse.urlencode({'version': version}))
+    if fmt == 'text':
+        return api.call('POST', path, version)
+    if fmt == 'raw':
+        return api.call('POST', path, raw)
+    return api.call('POST', path)
+
+
+def perform_update(ip, api, version, raw):
+    """Startet das Update. Im Automatik-Modus werden bei HTTP 400 die Formate der Reihe
+    nach probiert; das erste, das die Kamera annimmt, wird für alle weiteren gespeichert."""
+    fmt = config['perform_update_body']
+    if fmt != 'auto':
+        send_perform_update(api, fmt, version, raw)
+        return fmt
+    tried = []
+    for key, label in UPDATE_FORMATS:
+        set_cam(ip, detail='Update-Format wird ermittelt: %s ...' % label)
+        try:
+            send_perform_update(api, key, version, raw)
+        except CameraError as e:
+            if e.code in (400, 415, 422, 500):
+                tried.append(key)
+                continue
+            raise
+        with lock:
+            if config['perform_update_body'] == 'auto':
+                config['perform_update_body'] = key
+                save_config()
+        return key
+    raise CameraError('Kamera lehnt alle Formate für perform_update ab (%s) – bitte Screenshot der API-Doku schicken'
+                      % ', '.join(tried), 400)
 
 
 PHASES = {'starting': 'Startet', 'downloading': 'Lädt herunter', 'installing': 'Installiert', 'finished': 'Abgeschlossen'}

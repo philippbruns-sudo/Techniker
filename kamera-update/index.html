@@ -328,14 +328,18 @@
         <small>Änderung wirkt nach Neustart von server.py</small></div>
       <div class="field full"><label>Format perform_update</label>
         <select id="sBody">
-          <option value="text">Versionsnummer als Text – z. B. 4.12.0</option>
-          <option value="raw">Text von update_available unverändert</option>
+          <option value="auto">Automatisch ermitteln (empfohlen)</option>
           <option value="json">JSON {"version": "4.12.0"}</option>
-          <option value="json_raw">JSON {"version": "&lt;Text von update_available&gt;"}</option>
+          <option value="json_string">JSON-Text "4.12.0"</option>
+          <option value="form">Formularfeld version=4.12.0</option>
+          <option value="query">Adresse ?version=4.12.0</option>
+          <option value="json_raw">JSON {"version": "&lt;Originaltext&gt;"}</option>
+          <option value="text">Text 4.12.0</option>
+          <option value="raw">Originaltext unverändert</option>
           <option value="none">Ohne Inhalt</option>
         </select>
-        <small>Noch nicht an einer echten Kamera bestätigt. Bei „HTTP 400“ nacheinander die Formate an einer Kamera probieren –
-          die Fehlermeldung zeigt jeweils, was gesendet wurde und was die Kamera antwortet.</small></div>
+        <small>„Automatisch“ probiert beim ersten Update die Formate durch und speichert das erste,
+          das die Kamera annimmt. Danach steht hier das gefundene Format.</small></div>
     </div>
     <div class="dialog-actions">
       <button class="btn btn-secondary" onclick="closeDialog('settingsDialog')">Abbrechen</button>
@@ -583,7 +587,7 @@ function openSettings() {
   document.getElementById('sPrefix').value = s.api_prefix || '';
   document.getElementById('sAuth').value = s.auth || 'basic';
   document.getElementById('sParallel').value = s.parallel || 3;
-  document.getElementById('sBody').value = s.perform_update_body || 'text';
+  document.getElementById('sBody').value = s.perform_update_body || 'auto';
   openDialog('settingsDialog');
 }
 

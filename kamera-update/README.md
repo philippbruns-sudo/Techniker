@@ -77,20 +77,12 @@ Die Kameras brauchen dafür **Internetzugang** zum ARVOO-Server.
 
 ## Noch zu prüfen an einer echten Kamera
 
-- **Format von `perform_update`:** Standard ist die Versionsnummer als reiner Text (`text/plain`),
-  wie bei `set_password`. Antwortet die Kamera mit **HTTP 400**, unter ⚙ Einstellungen ein
-  anderes Format wählen und an **einer** Kamera erneut probieren:
-
-  | Einstellung | Gesendet wird |
-  |---|---|
-  | Versionsnummer als Text | `4.12.0` |
-  | Text von update_available unverändert | z. B. `Version 4.12.0 available` |
-  | JSON | `{"version": "4.12.0"}` |
-  | JSON mit Originaltext | `{"version": "Version 4.12.0 available"}` |
-  | Ohne Inhalt | – |
-
-  Die Fehlermeldung in der Liste und im Protokoll zeigt, was gesendet wurde und was die
-  Kamera geantwortet hat. In der Spalte „Verfügbar“ steht unter der Version der Originaltext.
+- **Format von `perform_update`:** Die API-Doku zeigt nicht, wie die Version übergeben wird.
+  Standard ist **Automatisch**: Beim ersten Update probiert das Tool bei HTTP 400 nacheinander
+  JSON `{"version": …}`, JSON-Text, Formularfeld, `?version=` in der Adresse, Text u. a. durch
+  und speichert das erste Format, das die Kamera annimmt (steht danach unter ⚙ Einstellungen
+  und im Protokoll als „Format: …“). Bitte das erste Update an **einer** Kamera starten.
+  Fehlermeldungen zeigen, was gesendet wurde und was die Kamera geantwortet hat.
 - **Inhalt von `update_available`:** Das Tool liest die Versionsnummer aus dem Text
   (z. B. „Version 4.12.0 available“ → `4.12.0`).
 - **Anmeldung:** Standard ist Basic, alternativ Digest in den Einstellungen.
