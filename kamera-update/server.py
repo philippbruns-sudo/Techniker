@@ -84,6 +84,7 @@ def load_cameras():
         return
     with open(cameras_file(), encoding='utf-8') as f:
         for c in json.load(f):
+            c['ip'] = normalize_address(c['ip'])
             cameras[c['ip']] = new_camera(c)
 
 
@@ -185,7 +186,7 @@ class FakeCamera:
     def __init__(self, ip, password=None):
         self.ip = ip
         if ip not in FakeCamera.state:
-            last = int(re.sub(r'\D', '', ip.split('.')[-1]) or 0)
+            last = int(re.sub(r'\D', '', ip.split(':')[0].split('.')[-1]) or 0)
             FakeCamera.state[ip] = {
                 'version': random.choice(['4.9.7', '4.10.2', '4.11.0', FakeCamera.LATEST]),
                 'serial': 'RB-%d-%05d' % (random.randint(23, 25), random.randint(0, 99999)),
@@ -292,9 +293,14 @@ def error_fields(e):
     return {'status': 'offline' if offline else 'error', 'online': not offline, 'detail': str(e)}
 
 
+check_slots = threading.BoundedSemaphore(10)
+
+
 def run_check(ip):
+    set_cam(ip, status='queued', detail='Wartet ...', progress=None)
     try:
-        check(ip)
+        with check_slots:
+            check(ip)
     except CameraError as e:
         set_cam(ip, last_check=now(), **error_fields(e))
     finally:
@@ -386,8 +392,18 @@ def start_jobs(ips, job):
 IP_RE = re.compile(r'^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}(:\d{1,5})?$')
 
 
+def normalize_address(text):
+    """'http://10.32.75.8:566/' -> '10.32.75.8:566', '10.32.75.8' -> '10.32.75.8:577' (Standardport).
+    Gleiche IP mit verschiedenen Ports sind verschiedene Kameras."""
+    addr = re.sub(r'^[a-zA-Z]+://', '', text.strip()).split('/')[0]
+    if addr and ':' not in addr:
+        addr = '%s:%s' % (addr, config.get('port', 577))
+    return addr
+
+
 def parse_camera_lines(text):
     """Eine Kamera pro Zeile: 'IP' oder 'IP Name' oder 'IP; Name; Passwort'.
+    Statt der IP geht auch der Link, z. B. 'http://10.32.75.8:566/'.
     Im Semikolon-Format wird das Passwort genau so übernommen (leer = Standardpasswort)."""
     result, errors = [], []
     for line in text.splitlines():
@@ -399,9 +415,11 @@ def parse_camera_lines(text):
         else:
             ip, _, name = line.partition(' ')
             parts = [ip, name.strip()]
-        ip = parts[0]
+        ip = normalize_address(parts[0])
         if not IP_RE.match(ip):
             errors.append(line)
+            continue
+        if any(r['ip'] == ip for r in result):
             continue
         result.append({'ip': ip, 'name': parts[1] if len(parts) > 1 else '',
                        'password': parts[2] if len(parts) > 2 and parts[2] else None,
@@ -471,7 +489,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == '/api/cameras':
             entries, errors = parse_camera_lines(data.get('text', ''))
-            added = 0
+            added = []
             with lock:
                 for e in entries:
                     if e['ip'] in cameras:
@@ -480,9 +498,10 @@ class Handler(BaseHTTPRequestHandler):
                             cameras[e['ip']]['password'] = e['password']
                     else:
                         cameras[e['ip']] = new_camera(e)
-                        added += 1
+                        added.append(e['ip'])
             save_cameras()
-            return self.send_json({'added': added, 'invalid': errors})
+            return self.send_json({'added': len(added), 'added_ips': added,
+                                   'updated': len(entries) - len(added), 'invalid': errors})
 
         if path == '/api/cameras/delete':
             with lock:

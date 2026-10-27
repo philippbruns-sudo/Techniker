@@ -29,8 +29,12 @@ Beim ersten Start unter **⚙ Einstellungen** das Kamera-Passwort eintragen.
 
 ## Bedienung
 
-1. **＋ Kameras hinzufügen** – eine IP pro Zeile, optional mit Name:
+1. **＋ IPs eintragen** – eine Kamera pro Zeile, als Link oder IP, optional mit Name.
+   Ohne Port gilt 577; gleiche IP mit anderem Port ist eine eigene Kamera.
+   Neue Kameras werden danach automatisch geprüft.
    ```
+   http://10.32.75.8:577/
+   http://10.32.75.8:566/
    10.32.47.135
    10.32.47.135 Parkhaus Nord
    10.32.47.135; Parkhaus Nord; Passwort   (eigenes Passwort)
@@ -38,8 +42,11 @@ Beim ersten Start unter **⚙ Einstellungen** das Kamera-Passwort eintragen.
    ```
 2. **🔍 Alle prüfen** – liest Version und Seriennummer und fragt beim ARVOO-Server,
    ob ein Update verfügbar ist. Ändert nichts an den Kameras.
-3. **⬆ Alle mit Update aktualisieren** oder Kameras auswählen und **⬆ Ausgewählte
-   aktualisieren**. Es laufen höchstens 3 Updates gleichzeitig (einstellbar).
+3. Aktualisieren – einzeln über **⬆** in der Zeile, mehrere per Häkchen und
+   **⬆ Ausgewählte aktualisieren**, **⬆ Alle mit Update aktualisieren** oder
+   **⬆ Alle aktualisieren**. Kameras, die schon aktuell sind, werden nur als
+   „bereits aktuell“ protokolliert. Es laufen höchstens 3 Updates gleichzeitig (einstellbar).
+   Ein Klick auf die IP öffnet die Weboberfläche der Kamera.
 4. Das **Update-Protokoll** unten zeigt jedes Update mit Zeitpunkt, Version vorher/nachher
    und Ergebnis. **⬇ CSV herunterladen** öffnet es in Excel.
 

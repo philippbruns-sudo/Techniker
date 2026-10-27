@@ -90,6 +90,8 @@
     tr:last-child td { border-bottom: none; }
     tbody tr:hover { background-color: #fffcf8; }
     tr.selected { background-color: #fffaf0 !important; }
+    .cam-link { color: inherit; text-decoration: none; border-bottom: 1px dashed #cbd5e1; }
+    .cam-link:hover { color: #ff6600; border-bottom-color: #ff6600; }
     .mono { font-family: Consolas, 'Courier New', monospace; font-weight: 600; color: #002d56; }
     .muted { color: #94a3b8; }
     .small { font-size: 12px; }
@@ -212,10 +214,11 @@
       <div class="section-head">
         <h2>Kameras <small id="selInfo"></small></h2>
         <div class="toolbar">
-          <button class="btn btn-secondary" onclick="openAdd()">＋ Kameras hinzufügen</button>
+          <button class="btn btn-secondary" onclick="openAdd()">＋ IPs eintragen</button>
           <button class="btn btn-navy" id="btnCheckAll" onclick="checkCams(allIps())">🔍 Alle prüfen</button>
           <button class="btn btn-primary" id="btnUpdateSel" onclick="askUpdate(selectedIps())">⬆ Ausgewählte aktualisieren</button>
           <button class="btn btn-primary" id="btnUpdateAvail" onclick="askUpdate(availableIps())">⬆ Alle mit Update aktualisieren</button>
+          <button class="btn btn-primary" id="btnUpdateAll" onclick="askUpdate(idleIps())">⬆ Alle aktualisieren</button>
           <button class="btn btn-danger" id="btnDeleteSel" onclick="askDelete(selectedIps())">Entfernen</button>
         </div>
       </div>
@@ -275,16 +278,18 @@
 <div class="dimmer" id="addDialog">
   <div class="dialog">
     <h3>Kameras hinzufügen</h3>
-    <p>Eine Kamera pro Zeile. Der Name ist optional, ein eigenes Passwort nur nötig, wenn es vom Standard abweicht.
-      Ist eine IP schon in der Liste, werden Name bzw. Passwort aktualisiert.</p>
+    <p>Eine Kamera pro Zeile – einfach die Liste mit Links oder IPs einfügen. Ohne Port gilt 577.
+      Gleiche IP mit anderem Port ist eine eigene Kamera. Neue Kameras werden danach automatisch geprüft.</p>
     <div class="hint">
+      <code>http://10.32.75.8:577/</code><br>
+      <code>10.32.75.8:566</code><br>
       <code>10.32.47.135</code><br>
       <code>10.32.47.135 Parkhaus Nord</code><br>
       <code>10.32.47.135; Parkhaus Nord; Passwort</code> &nbsp;(eigenes Passwort)<br>
       <code>10.32.47.135; Parkhaus Nord;</code> &nbsp;(wieder Standardpasswort)<br>
       <code>10.32.47.135:577</code> &nbsp;(anderer Port)
     </div>
-    <textarea id="addText" placeholder="10.32.47.131 Parkhaus Nord&#10;10.32.47.132 Parkhaus Nord&#10;10.32.47.135 Einfahrt Süd"></textarea>
+    <textarea id="addText" placeholder="http://10.32.75.118:577/&#10;http://10.32.75.118:566/&#10;10.32.47.135 Einfahrt Süd"></textarea>
     <div class="dialog-actions">
       <button class="btn btn-secondary" onclick="closeDialog('addDialog')">Abbrechen</button>
       <button class="btn btn-primary" onclick="addCams()">Hinzufügen</button>
@@ -404,7 +409,7 @@ function render() {
   setText('kBad', count(function(c) { return c.status === 'offline' || c.status === 'error'; }));
 
   var body = cams.length ? cams.map(camRow).join('') :
-    '<tr><td colspan="10" class="empty">Noch keine Kameras – über „＋ Kameras hinzufügen“ IP-Adressen eintragen.</td></tr>';
+    '<tr><td colspan="10" class="empty">Noch keine Kameras – über „＋ IPs eintragen“ die Liste einfügen.</td></tr>';
   setHtml('camBody', body);
 
   var sel = selectedIps();
@@ -414,6 +419,7 @@ function render() {
   document.getElementById('btnDeleteSel').disabled = !sel.length;
   document.getElementById('btnUpdateAvail').disabled = !availableIps().length;
   document.getElementById('btnCheckAll').disabled = !cams.length;
+  document.getElementById('btnUpdateAll').disabled = !idleIps().length;
 
   renderLog();
 }
@@ -429,7 +435,8 @@ function camRow(c) {
   var detail = c.detail && c.status !== 'current' && c.status !== 'available' ? '<div class="status-detail">' + esc(c.detail) + '</div>' : '';
   return '<tr class="' + (selected[c.ip] ? 'selected' : '') + '">' +
     '<td><input type="checkbox" ' + (selected[c.ip] ? 'checked' : '') + ' onclick="toggleSel(\'' + esc(c.ip) + '\', this.checked)"></td>' +
-    '<td class="mono">' + esc(c.ip) + (c.own_password ? ' <span title="eigenes Passwort">🔑</span>' : '') + '</td>' +
+    '<td class="mono"><a class="cam-link" href="http://' + esc(c.ip) + '/" target="_blank" rel="noopener" title="Weboberfläche der Kamera öffnen">' +
+      esc(c.ip) + '</a>' + (c.own_password ? ' <span title="eigenes Passwort">🔑</span>' : '') + '</td>' +
     '<td>' + (c.name ? esc(c.name) : '<span class="muted">–</span>') + '</td>' +
     '<td>' + badge + detail + bar + '</td>' +
     '<td class="mono">' + (c.version ? esc(c.version) : '<span class="muted">–</span>') + '</td>' +
@@ -498,14 +505,15 @@ function toast(msg) {
 
 function allIps() { return state.cameras.map(function(c) { return c.ip; }); }
 function selectedIps() { return Object.keys(selected); }
+function idleIps() { return state.cameras.filter(function(c) { return !c.busy; }).map(function(c) { return c.ip; }); }
 function availableIps() { return state.cameras.filter(function(c) { return c.status === 'available' && !c.busy; }).map(function(c) { return c.ip; }); }
 
 function toggleSel(ip, on) { if (on) selected[ip] = true; else delete selected[ip]; render(); }
 function toggleAll(on) { selected = {}; if (on) allIps().forEach(function(ip) { selected[ip] = true; }); render(); }
 
-function checkCams(ips) {
-  post('/api/check', { ips: ips }).then(function(r) {
-    toast(r.started.length + ' Kamera(s) werden geprüft');
+function checkCams(ips, quiet) {
+  return post('/api/check', { ips: ips }).then(function(r) {
+    if (!quiet) toast(r.started.length + ' Kamera(s) werden geprüft');
     refresh();
   });
 }
@@ -552,8 +560,13 @@ function openAdd() { document.getElementById('addText').value = ''; openDialog('
 function addCams() {
   post('/api/cameras', { text: document.getElementById('addText').value }).then(function(r) {
     closeDialog('addDialog');
-    toast(r.added + ' Kamera(s) hinzugefügt' + (r.invalid.length ? ', ' + r.invalid.length + ' Zeile(n) ungültig: ' + r.invalid.join(', ') : ''));
-    refresh();
+    var msg = r.added + ' Kamera(s) hinzugefügt';
+    if (r.updated) msg += ', ' + r.updated + ' schon vorhanden';
+    if (r.invalid.length) msg += ' – ' + r.invalid.length + ' Zeile(n) nicht erkannt: ' + r.invalid.join(', ');
+    if (r.added) msg += '. Neue Kameras werden geprüft ...';
+    toast(msg);
+    // Neue Kameras gleich prüfen (liest nur Version und verfügbares Update)
+    if (r.added_ips && r.added_ips.length) checkCams(r.added_ips, true); else refresh();
   });
 }
 
