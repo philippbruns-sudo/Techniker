@@ -15,7 +15,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.1.3'
+VERSION = '0.1.4'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -32,6 +32,7 @@ DEFAULT_CONFIG = {
     'backup_mode': 'all_settings',
     'internet': True,
     'perform_update_body': 'json',
+    'allow_downgrade': False,
     'timeout_s': 10,
     'update_timeout_min': 30,
     'ip_change_timeout_s': 240,
@@ -229,6 +230,16 @@ def read_mac(ip):
     return None
 
 
+def version_key(value):
+    nums = re.findall(r'\d+', str(value or ''))
+    return tuple(int(n) for n in nums) if nums else None
+
+
+def is_newer(target, current):
+    t, c = version_key(target), version_key(current)
+    return bool(t and c and t > c)
+
+
 def version_of(value):
     if not value or str(value).strip().lower() in ('false', 'none', 'null', '0'):
         return None
@@ -344,13 +355,15 @@ class Job:
             self.set('firmware', detail='Suche nach Updates%s ...' % (' (Runde %d)' % round_no if round_no > 1 else ''), progress=None)
             current, target = self.check_for_update(api)
             first = first or current
-            if not target or target == current:
+            downgrade_ok = config.get('allow_downgrade') and target and target != current and not history
+            if not target or (not is_newer(target, current) and not downgrade_ok):
                 self.cam(version_after=current)
+                note = ' (angeboten: %s – nicht neuer, ignoriert)' % target if target and target != current else ''
                 if not history:
                     self.set('firmware', status='skipped')
-                    return 'Version %s ist aktuell' % current
-                return 'Version %s → %s (%d Update%s), danach kein weiteres Update' % (
-                    first, current, len(history), '' if len(history) == 1 else 's')
+                    return 'Version %s ist aktuell%s' % (current, note)
+                return 'Version %s → %s (%d Update%s), danach kein neueres Update%s' % (
+                    first, current, len(history), '' if len(history) == 1 else 's', note)
             self.target_version = target
             prefix = 'Runde %d: ' % round_no if round_no > 1 else ''
             self.set('firmware', detail='%sUpdate %s → %s wird gestartet ...' % (prefix, current, target), progress=0)
@@ -761,6 +774,8 @@ class Handler(BaseHTTPRequestHandler):
                     config[key] = max(1, int(data[key]))
             if 'internet' in data:
                 config['internet'] = bool(data['internet'])
+            if 'allow_downgrade' in data:
+                config['allow_downgrade'] = bool(data['allow_downgrade'])
             if data.get('new_password'):
                 config['new_password'] = data['new_password']
             if data.get('profiles'):

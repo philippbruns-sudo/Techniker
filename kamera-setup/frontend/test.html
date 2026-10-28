@@ -87,6 +87,7 @@
           <div><label>Werks-IP</label><input id="sFactory" class="mono"></div>
         </div>
         <label class="switch"><input type="checkbox" id="sInternet"> Internet (Firmware-Update) – kamera-internet.sh --on nötig</label>
+        <label class="switch"><input type="checkbox" id="sDowngrade"> Angebotene Version auch installieren, wenn sie <b>älter</b> ist</label>
         <div class="hint">Backup-Dateien in <span class="mono">backups/</span>: <span id="backups">–</span></div>
         <label>Backup hochladen</label>
         <div class="row" style="grid-template-columns: 1fr auto; align-items: center;">
@@ -161,6 +162,7 @@ function render() {
     document.getElementById('sBackupMode').value = st.backup_mode;
     document.getElementById('sFactory').value = st.factory_ip;
     document.getElementById('sInternet').checked = st.internet;
+    document.getElementById('sDowngrade').checked = !!st.allow_downgrade;
     loadedSettings = true;
   }
   document.getElementById('sNewPwState').innerText = s.settings.new_password_set ? 'Ein neues Passwort ist gespeichert.' : 'Noch kein neues Passwort gespeichert!';
@@ -199,7 +201,8 @@ function saveSettings() {
   var d = {
     backup_mode: document.getElementById('sBackupMode').value,
     factory_ip: document.getElementById('sFactory').value,
-    internet: document.getElementById('sInternet').checked
+    internet: document.getElementById('sInternet').checked,
+    allow_downgrade: document.getElementById('sDowngrade').checked
   };
   var pw = document.getElementById('sNewPw').value;
   if (pw) d.new_password = pw;

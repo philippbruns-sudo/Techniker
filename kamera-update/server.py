@@ -312,7 +312,17 @@ def available_version(value, current):
         return None
     m = re.search(r'\d+(?:\.\d+)+', str(value))
     version = m.group(0) if m else str(value).strip()
-    return None if version == current else version
+    return version if is_newer(version, current) else None
+
+
+def version_key(value):
+    nums = re.findall(r'\d+', str(value or ''))
+    return tuple(int(n) for n in nums) if nums else None
+
+
+def is_newer(target, current):
+    t, c = version_key(target), version_key(current)
+    return bool(t and c and t > c)
 
 
 def set_cam(ip, **fields):
