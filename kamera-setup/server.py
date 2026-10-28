@@ -343,7 +343,7 @@ class Job:
             body = {'version': offered} if config['perform_update_body'] == 'json' else offered
             api.call('POST', '/system/actions/perform_update', body)
             if not self.wait_update_done(api, prefix + offered):
-                results.append('Runde %d: %s von Kamera abgelehnt' % (round_no, offered))
+                results.append('Runde %d: %s von Kamera abgelehnt (Fehler: %s)' % (round_no, offered, getattr(self, 'update_error', '?')))
                 break
             results.append('Runde %d: %s installiert' % (round_no, offered))
         info = api.call('GET', '/system/info')
@@ -389,6 +389,7 @@ class Job:
                 active, ready, rejected = True, 0, 0
             elif isinstance(prog, dict) and prog.get('error'):
                 rejected += 1
+                self.update_error = prog.get('error')
                 self.set('firmware', detail='%s – Kamera meldet Fehler, prüfe ... (%s)' % (label, elapsed), progress=None)
                 if rejected >= 3:
                     self.set('firmware', progress=None)
@@ -407,7 +408,7 @@ class Job:
     def do_password(self):
         new = config.get('new_password')
         if not new:
-            raise StepError('Kein neues Passwort in den Einstellungen hinterlegt')
+            raise StepError('Kein neues Passwort hinterlegt – Testseite › Einstellungen › „Neues Kamera-Passwort“ eintragen und Speichern')
         if self.password == new:
             return 'Passwort ist bereits gesetzt'
         old = self.password
@@ -750,7 +751,8 @@ class Handler(BaseHTTPRequestHandler):
             if 'internet' in data:
                 config['internet'] = bool(data['internet'])
             if data.get('new_password'):
-                config['new_password'] = data['new_password']
+                config['new_password'] = str(data['new_password']).strip()
+                print('Neues Kamera-Passwort gespeichert (%d Zeichen)' % len(config['new_password']), flush=True)
             if data.get('profiles'):
                 config['profiles'] = data['profiles']
             save_config()
