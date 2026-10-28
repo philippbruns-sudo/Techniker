@@ -80,9 +80,9 @@ entspricht der MAC ohne Doppelpunkte.
 | 1 | Kamera auf `192.168.0.240` finden | TCP Port 80 | ✅ bestätigt |
 | 2 | MAC aus ARP, Passwort = letzte 4 Zeichen groß, anmelden | `GET /system/info` | ✅ bestätigt |
 | 3 | Firmware-Update: **einmal** nach Update fragen, wenn eins angeboten wird, installieren – fertig. Versionsnummern werden ignoriert | `check_update`, `perform_update` `{"version": …}`, `update_progress` | ✅ Format bestätigt (Update-Tool) |
-| 4 | Neues Passwort setzen, alt/neu prüfen | `POST /system/actions/set_password` (text/plain) | ⏳ an Kamera testen |
-| 5 | Name setzen und zurücklesen | `POST /system/settings/` `{"name": …}` | ⏳ an Kamera testen |
-| 6 | Backup einspielen (IP aus Profil) | `POST /system/actions/all_settings` oder Abschnitte einzeln | ⏳ an Kamera testen |
+| 4 | Neues Passwort setzen, alt/neu prüfen | `POST /system/actions/set_password` (text/plain) | ✅ bestätigt |
+| 5 | Name setzen und zurücklesen | `POST /system/settings/` `{"name": …}` | ✅ bestätigt |
+| 6 | Backup einspielen (IP aus Profil) | `POST /system/actions/all_settings`; lehnt die Kamera ab (z. B. HTTP 500), automatisch Abschnitte einzeln (ANPR, Basis, Netzwerk zuletzt) | ⏳ an Kamera testen |
 | 7 | Auf neuer IP warten, alle Abschnitte mit Backup vergleichen | `GET` je Abschnitt | ⏳ an Kamera testen |
 | 8 | Abschlussprüfung: Version, Name | `GET /system/info`, `/system/settings/` | ⏳ an Kamera testen |
 

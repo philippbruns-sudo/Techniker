@@ -438,26 +438,35 @@ class Job:
         data = load_backup()
         target = profile()['ip']
         api = self.api()
-        if config['backup_mode'] == 'sections':
-            order = sorted(data.keys(), key=lambda k: 'network' in k)
-            for key in order:
-                path = '/' + key.replace(config['api_prefix'].strip('/') + '/', '', 1).lstrip('/')
-                self.set('backup', detail='%s ...' % path)
-                try:
-                    api.call('POST', path, data[key], timeout=30)
-                except StepError as e:
-                    if 'network' in key and 'nicht erreichbar' in str(e):
-                        break
-                    raise
-        else:
+        mode = 'Abschnitte einzeln'
+        if config['backup_mode'] != 'sections':
             self.set('backup', detail='all_settings wird übertragen ...')
             try:
                 api.call('POST', '/system/actions/all_settings', data, timeout=60)
+                mode = 'all_settings'
             except StepError as e:
-                if 'nicht erreichbar' not in str(e):
+                if 'nicht erreichbar' in str(e):
+                    mode = 'all_settings'
+                elif not e.code or e.code == 401:
                     raise
+                else:
+                    self.set('backup', detail='all_settings abgelehnt (HTTP %s) – Abschnitte einzeln ...' % e.code)
+                    mode = 'Abschnitte einzeln, all_settings: HTTP %s' % e.code
+        if mode.startswith('Abschnitte'):
+            self.post_sections(api, data)
         self.ip = target
-        return 'Übertragen (%s), Netzwerk wechselt auf %s' % (', '.join(k.split('/')[-2] for k in data), bare_ip(target))
+        return 'Übertragen (%s; %s), Netzwerk wechselt auf %s' % (', '.join(k.split('/')[-2] for k in data), mode, bare_ip(target))
+
+    def post_sections(self, api, data):
+        for key in sorted(data.keys(), key=lambda k: 'network' in k):
+            path = '/' + key.replace(config['api_prefix'].strip('/') + '/', '', 1).lstrip('/')
+            self.set('backup', detail='%s ...' % path)
+            try:
+                api.call('POST', path, data[key], timeout=30)
+            except StepError as e:
+                if 'network' in key and 'nicht erreichbar' in str(e):
+                    break
+                raise
 
     def do_newip(self):
         target = profile()['ip']
