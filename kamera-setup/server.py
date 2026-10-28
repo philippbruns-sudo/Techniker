@@ -368,16 +368,31 @@ class Job:
                 break
             self.set('firmware', detail='%sUpdate %s wird installiert ...' % (prefix, offered), progress=0)
             body = {'version': offered} if config['perform_update_body'] == 'json' else offered
-            api.call('POST', '/system/actions/perform_update', body)
+            try:
+                api.call('POST', '/system/actions/perform_update', body, timeout=60)
+            except StepError as e:
+                if e.code:
+                    raise
             if not self.wait_update_done(api, prefix + offered):
                 results.append('%s%s von Kamera abgelehnt (Fehler: %s)' % (prefix, offered, getattr(self, 'update_error', '?')))
                 break
             results.append('%s%s installiert' % (prefix, offered))
-        info = api.call('GET', '/system/info')
+        info = self.wait_reachable(api)
         self.cam(version_after=info.get('version'))
         if all('kein Update' in r for r in results):
             self.set('firmware', status='skipped')
         return ' · '.join(results) + ' · jetzt %s' % info.get('version')
+
+    def wait_reachable(self, api, minutes=5):
+        deadline = time.time() + minutes * 60
+        while True:
+            try:
+                return api.call('GET', '/system/info', quiet=True)
+            except StepError as e:
+                if (e.code and e.code < 500) or time.time() > deadline:
+                    raise
+                self.set('firmware', detail='Warte auf Kamera ...', progress=None)
+                self.sleep(5)
 
     def check_for_update(self, api):
         for attempt in range(6):
