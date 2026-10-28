@@ -5,3 +5,8 @@ arvoo*.json
 
 # Firmware-Dateien
 firmware/
+
+# Einstellungen inkl. Kamera-Passwort, Protokoll
+config.json
+data/
+__pycache__/

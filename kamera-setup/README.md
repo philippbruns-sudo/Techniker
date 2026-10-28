@@ -42,6 +42,29 @@ sudo bash ~/Techniker/kamera-setup/pi/kamera-internet.sh --status
 sudo bash ~/Techniker/kamera-setup/pi/kamera-internet.sh --off
 ```
 
+## Starten (auf dem Pi)
+
+```bash
+cd ~/Techniker && git pull
+mkdir -p ~/Techniker/kamera-setup/backups           # Backup-Datei hier ablegen: backup.json
+sudo python3 ~/Techniker/kamera-setup/server.py --manual
+```
+
+| Adresse | Zweck |
+|---|---|
+| `http://<pi-ip>:8080/test` | **Testmodus** – jeden Schritt einzeln ausführen, alle Anfragen an die Kamera mit Antwort sehen |
+| `http://<pi-ip>:8080/` | Normale Oberfläche (Tablet) |
+
+`--manual` schaltet die automatische Erkennung aus (zum Testen). Ohne `--manual` startet die
+Einrichtung von selbst, sobald eine Kamera auf der Werks-IP antwortet. `sudo` wird gebraucht,
+um vor dem Anmelden den ARP-Cache zu leeren (MAC der richtigen Kamera).
+
+Beim ersten Start entsteht `config.json` (nicht im Repo). Im Testmodus unter **Einstellungen**
+das **neue Kamera-Passwort** eintragen. Ein Backup reicht für beide Profile – die IP
+(`.21` bzw. `.22`) wird beim Einspielen automatisch gesetzt.
+
+Protokoll: `data/setup_log.csv` (MAC, Seriennummer, IP, Firmware vorher/nachher, Lizenz, Ergebnis).
+
 ## Ablauf pro Kamera
 
 Bestätigt an einer Ruby LR (Firmware 4.96.1): Werks-IP `192.168.0.240`, API direkt auf **Port 80**
@@ -49,16 +72,20 @@ Bestätigt an einer Ruby LR (Firmware 4.96.1): Werks-IP `192.168.0.240`, API dir
 Benutzer `user`, Passwort = letzte 4 Zeichen der MAC in Großbuchstaben. Die Seriennummer
 entspricht der MAC ohne Doppelpunkte.
 
-| # | Schritt | Kamera-API |
-|---|---|---|
-| 1 | Kamera auf Werks-IP finden (`192.168.0.240`, Port 80) | `GET /system/info/up` |
-| 2 | MAC per ARP auslesen, Passwort = letzte 4 Zeichen in **Großbuchstaben** (z. B. `A5CB`), anmelden | `GET /system/info` |
-| 3 | Passwort ändern (Body: `text/plain`, nur das neue Passwort) | `POST /system/actions/set_password` |
-| 4 | Name „CAM 1“ setzen und zurücklesen | `POST /api/v2/system/settings/` |
-| 5 | Backup einspielen (ANPR → Base → Netzwerk zuletzt) | `POST /system/actions/all_settings` |
-| 6 | Auf 192.168.8.21 warten, Einstellungen zurücklesen und vergleichen | `GET /network/settings` |
-| 7 | Firmware hochladen, Fortschritt verfolgen | `POST /system/actions/upload_update`, `GET /system/info/update_progress` |
-| 8 | Abschlussprüfung (Version, Name, IP) | `GET /system/info` |
+| # | Schritt | Kamera-API | Stand |
+|---|---|---|---|
+| 1 | Kamera auf `192.168.0.240` finden | TCP Port 80 | ✅ bestätigt |
+| 2 | MAC aus ARP, Passwort = letzte 4 Zeichen groß, anmelden | `GET /system/info` | ✅ bestätigt |
+| 3 | Lizenz abrufen (Internet über den Pi) | `POST /system/actions/check_license` | ✅ bestätigt |
+| 4 | Firmware-Update, Fortschritt, Neustart abwarten | `check_update`, `perform_update` `{"version": …}`, `update_progress` | ✅ Format bestätigt (Update-Tool) |
+| 5 | Neues Passwort setzen, alt/neu prüfen | `POST /system/actions/set_password` (text/plain) | ⏳ an Kamera testen |
+| 6 | Name setzen und zurücklesen | `POST /system/settings/` `{"name": …}` | ⏳ an Kamera testen |
+| 7 | Backup einspielen (IP aus Profil) | `POST /system/actions/all_settings` oder Abschnitte einzeln | ⏳ an Kamera testen |
+| 8 | Auf neuer IP warten, alle Abschnitte mit Backup vergleichen | `GET` je Abschnitt | ⏳ an Kamera testen |
+| 9 | Abschlussprüfung: Version, Name, Lizenz | `GET /system/info`, `/system/settings/` | ⏳ an Kamera testen |
+
+Lizenz und Update laufen **vor** dem Backup, solange die Kamera noch im Werksnetz hängt
+(dort kann der Pi Gateway spielen, siehe `kamera-internet.sh`).
 
 Name und Passwort sind nicht im Backup enthalten und werden davon nicht überschrieben.
 

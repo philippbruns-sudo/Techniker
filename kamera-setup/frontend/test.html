@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kamera-Setup · Testmodus</title>
+<style>
+  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: #fcfbfa; margin: 0; padding: 16px; color: #334155; }
+  .wrap { max-width: 1400px; margin: 0 auto; background: white; border-radius: 16px; border-top: 5px solid #ff6600; box-shadow: 0 8px 30px rgba(255,102,0,0.08); overflow: hidden; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 14px 24px; border-bottom: 1px solid #f3e9e2; }
+  header h1 { margin: 0; font-size: 18px; color: #002d56; }
+  header h1 span { background: #ff6600; color: white; font-size: 11px; padding: 3px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
+  header a { color: #002d56; font-weight: 600; font-size: 14px; }
+  .body { display: grid; grid-template-columns: 380px 1fr; gap: 20px; padding: 20px 24px; }
+  h2 { font-size: 15px; color: #002d56; margin: 0 0 10px 0; }
+  .card { background: #fdfaf7; border-left: 4px solid #ff6600; border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: #ff6600; margin: 8px 0 4px; }
+  input, select { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 2px solid #f3e9e2; border-radius: 6px; font-size: 14px; font-family: inherit; background: white; }
+  input:focus, select:focus { border-color: #ff6600; outline: none; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btn { border: none; border-radius: 6px; padding: 8px 14px; font-weight: 600; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .btn-primary { background: #ff6600; color: white; }
+  .btn-navy { background: #002d56; color: white; }
+  .btn-sec { background: white; color: #002d56; border: 2px solid #cbd5e1; }
+  .btn:disabled { background: #e2e8f0 !important; color: #94a3b8 !important; border-color: #e2e8f0 !important; cursor: not-allowed; }
+  .kv { font-size: 13px; display: grid; grid-template-columns: 110px 1fr; gap: 4px 8px; }
+  .kv b { color: #64748b; font-weight: 600; }
+  .mono { font-family: Consolas, 'Courier New', monospace; }
+  .ok { color: #155724; } .bad { color: #c53030; }
+  .steps { list-style: none; margin: 0 0 16px 0; padding: 0; }
+  .step { display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; border: 2px solid #f3e9e2; border-radius: 8px; margin-bottom: 6px; }
+  .step .ic { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; background: #e2e8f0; color: #94a3b8; }
+  .step.done .ic { background: #4caf50; color: white; } .step.error .ic { background: #e53e3e; color: white; }
+  .step.skipped .ic { background: #cbd5e1; color: white; } .step.running { border-color: #ff6600; background: #fffaf0; }
+  .step.error { border-color: #e53e3e; background: #fff5f5; }
+  .step .t { font-weight: 600; color: #002d56; font-size: 14px; }
+  .step .d { font-size: 12px; color: #64748b; margin-top: 2px; word-break: break-word; }
+  .step.error .d { color: #c53030; font-weight: 600; }
+  .spin { width: 14px; height: 14px; border: 3px solid #f3e9e2; border-top-color: #ff6600; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: #ff6600; font-size: 11px; text-transform: uppercase; padding: 6px; border-bottom: 2px solid #f3e9e2; }
+  td { padding: 6px; border-bottom: 1px solid #f3e9e2; vertical-align: top; }
+  td.resp { max-width: 520px; word-break: break-all; }
+  .st-ok { color: #155724; font-weight: 700; } .st-bad { color: #c53030; font-weight: 700; }
+  .hint { font-size: 12px; color: #64748b; margin-top: 6px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .switch { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .switch input { width: auto; }
+  @media (max-width: 1000px) { .body { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Kamera-Setup · Testmodus <span id="ver">–</span></h1>
+    <a href="/">→ Normale Oberfläche</a>
+  </header>
+  <div class="body">
+    <div>
+      <div class="card">
+        <h2>Kamera</h2>
+        <div class="kv" id="camInfo"></div>
+        <label>Ziel-IP für den nächsten Schritt</label>
+        <input id="ctxIp" class="mono">
+        <label>Passwort (falls bekannt)</label>
+        <input id="ctxPw" class="mono" placeholder="wird bei „Anmelden“ aus der MAC gesetzt">
+        <div style="margin-top:8px"><button class="btn btn-sec" onclick="saveCtx()">Übernehmen</button></div>
+      </div>
+
+      <div class="card">
+        <h2>Netzwerk</h2>
+        <div class="kv" id="routes"></div>
+        <div class="hint">Alle Kamera-Adressen müssen über eth0 laufen.</div>
+      </div>
+
+      <div class="card">
+        <h2>Einstellungen</h2>
+        <label>Profil</label>
+        <select id="sProfile"></select>
+        <label>Neues Kamera-Passwort</label>
+        <input id="sNewPw" type="password" placeholder="unverändert">
+        <div class="hint" id="sNewPwState"></div>
+        <div class="row">
+          <div><label>Backup-Modus</label>
+            <select id="sBackupMode"><option value="all_settings">all_settings (eine Anfrage)</option><option value="sections">Abschnitte einzeln</option></select></div>
+          <div><label>Werks-IP</label><input id="sFactory" class="mono"></div>
+        </div>
+        <label class="switch"><input type="checkbox" id="sInternet"> Internet (Lizenz &amp; Update) – kamera-internet.sh --on nötig</label>
+        <div class="hint">Backup-Dateien in <span class="mono">backups/</span>: <span id="backups">–</span></div>
+        <div style="margin-top:10px"><button class="btn btn-primary" onclick="saveSettings()">Speichern</button></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="toolbar">
+        <h2 style="margin:0; flex:1;">Schritte einzeln ausführen</h2>
+        <label class="switch" style="margin:0; color:#334155; font-weight:400;"><input type="checkbox" id="auto" onchange="setAuto(this.checked)"> automatische Erkennung</label>
+        <button class="btn btn-sec" id="btnCancel" onclick="post('/api/cancel')">Abbrechen</button>
+        <button class="btn btn-sec" onclick="post('/api/next')">Zurücksetzen</button>
+      </div>
+      <ul class="steps" id="steps"></ul>
+
+      <div class="toolbar">
+        <h2 style="margin:0; flex:1;">Kommunikation mit der Kamera <span class="hint">(neueste oben)</span></h2>
+        <button class="btn btn-sec" onclick="post('/api/test/clear')">Leeren</button>
+      </div>
+      <table>
+        <thead><tr><th>Zeit</th><th>Anfrage</th><th>Gesendet</th><th>Status</th><th>Antwort</th></tr></thead>
+        <tbody id="log"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+var state = null, loadedSettings = false;
+
+function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function post(url, data) {
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data || {}) })
+    .then(function(r) { return r.json(); }).then(function(r) { if (r.error) alert(r.error); refresh(); return r; });
+}
+
+function refresh() {
+  return fetch('/api/test/state', { cache: 'no-store' }).then(function(r) { return r.json(); }).then(function(s) { state = s; render(); });
+}
+
+function render() {
+  var s = state;
+  document.getElementById('ver').innerText = 'v' + s.version;
+  var c = s.camera || {};
+  document.getElementById('camInfo').innerHTML = [
+    ['Aktuelle IP', s.ip], ['Passwort', s.password_known ? 'bekannt' : '–'], ['MAC', c.mac], ['Seriennummer', c.serial],
+    ['Modell', c.model], ['Firmware', c.version_after && c.version_after !== c.version_before ? c.version_before + ' → ' + c.version_after : c.version_before],
+    ['Lizenz', c.license], ['Name', c.name]
+  ].map(function(r) { return '<b>' + r[0] + '</b><span class="mono">' + esc(r[1] || '–') + '</span>'; }).join('');
+  if (document.activeElement.id !== 'ctxIp') document.getElementById('ctxIp').value = s.ip || '';
+
+  document.getElementById('routes').innerHTML = Object.keys(s.routes).map(function(ip) {
+    var dev = s.routes[ip];
+    return '<b class="mono">' + esc(ip) + '</b><span class="' + (dev === 'eth0' ? 'ok' : 'bad') + '">' + (dev === 'eth0' ? '✓ eth0' : '✗ ' + esc(dev || 'keine Route')) + '</span>';
+  }).join('');
+
+  document.getElementById('auto').checked = s.auto_detect;
+  document.getElementById('btnCancel').disabled = !s.running;
+  document.getElementById('backups').innerText = s.backups.length ? s.backups.join(', ') : 'keine – bitte ablegen';
+
+  if (!loadedSettings) {
+    var st = s.settings;
+    document.getElementById('sProfile').innerHTML = st.profiles.map(function(p) {
+      return '<option value="' + esc(p.id) + '">' + esc(p.name + ' · ' + p.ip + ' · ' + p.backup) + '</option>';
+    }).join('');
+    document.getElementById('sProfile').value = st.profile;
+    document.getElementById('sBackupMode').value = st.backup_mode;
+    document.getElementById('sFactory').value = st.factory_ip;
+    document.getElementById('sInternet').checked = st.internet;
+    loadedSettings = true;
+  }
+  document.getElementById('sNewPwState').innerText = s.settings.new_password_set ? 'Ein neues Passwort ist gespeichert.' : 'Noch kein neues Passwort gespeichert!';
+
+  document.getElementById('steps').innerHTML = s.steps.map(function(st) {
+    var icon = st.status === 'running' ? '<div class="spin"></div>' : ({ done: '✓', error: '✕', skipped: '–' }[st.status] || '');
+    return '<li class="step ' + st.status + '"><div class="ic">' + icon + '</div><div><div class="t">' + esc(st.label) +
+      ' <span class="hint mono">' + st.key + '</span></div><div class="d">' + esc(st.detail || '') + '</div></div>' +
+      '<button class="btn btn-navy" ' + (s.running ? 'disabled' : '') + ' onclick="runStep(\'' + st.key + '\')">Ausführen</button></li>';
+  }).join('');
+
+  document.getElementById('log').innerHTML = s.http_log.map(function(e) {
+    var good = typeof e.status === 'number' && e.status < 300;
+    return '<tr><td class="mono">' + esc(e.time.slice(11)) + '</td><td class="mono"><b>' + esc(e.method) + '</b> ' + esc(e.url.replace(/^http:\/\/[^/]+/, '')) +
+      '<div class="hint">' + esc(e.url.match(/^http:\/\/([^/]+)/)[1]) + '</div></td><td class="mono resp">' + esc(e.sent) +
+      '</td><td class="' + (good ? 'st-ok' : 'st-bad') + '">' + esc(e.status) + '</td><td class="mono resp">' + esc(e.response) + '</td></tr>';
+  }).join('') || '<tr><td colspan="5" class="hint">Noch keine Anfragen.</td></tr>';
+}
+
+function runStep(key) { post('/api/test/run', { step: key }); }
+function setAuto(on) { post('/api/test/auto', { on: on }); }
+function saveCtx() { post('/api/test/context', { ip: document.getElementById('ctxIp').value, password: document.getElementById('ctxPw').value }); document.getElementById('ctxPw').value = ''; }
+function saveSettings() {
+  var d = {
+    backup_mode: document.getElementById('sBackupMode').value,
+    factory_ip: document.getElementById('sFactory').value,
+    internet: document.getElementById('sInternet').checked
+  };
+  var pw = document.getElementById('sNewPw').value;
+  if (pw) d.new_password = pw;
+  post('/api/settings', d).then(function() {
+    return post('/api/profile', { id: document.getElementById('sProfile').value });
+  }).then(function() { document.getElementById('sNewPw').value = ''; loadedSettings = false; refresh(); });
+}
+
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
