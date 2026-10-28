@@ -27,6 +27,21 @@ sudo bash ~/Techniker/kamera-setup/pi/netz-einrichten.sh --check    # prüfen (K
 sudo bash ~/Techniker/kamera-setup/pi/netz-einrichten.sh --remove   # rückgängig
 ```
 
+### Internet für die Kamera (Lizenz und Firmware-Update)
+
+Im Werkszustand nutzt die Kamera Gateway und DNS `192.168.0.1`. `pi/kamera-internet.sh`
+lässt den Pi diese Rolle übernehmen – **nur nach Freigabe durch die IT einschalten**:
+
+- NAT von `192.168.0.0/24` ins WLAN, **private Netze gesperrt** (kein Zugriff aufs Firmennetz)
+- aus dem WLAN nur Antworten zur Kamera, keine neuen Verbindungen
+- DNS (dnsmasq) nur auf eth0, ohne DHCP – der Pi wird kein DNS-Server im Firmen-WLAN
+
+```bash
+sudo bash ~/Techniker/kamera-setup/pi/kamera-internet.sh --on
+sudo bash ~/Techniker/kamera-setup/pi/kamera-internet.sh --status
+sudo bash ~/Techniker/kamera-setup/pi/kamera-internet.sh --off
+```
+
 ## Ablauf pro Kamera
 
 Bestätigt an einer Ruby LR (Firmware 4.96.1): Werks-IP `192.168.0.240`, API direkt auf **Port 80**
