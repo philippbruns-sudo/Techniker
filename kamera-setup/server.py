@@ -15,7 +15,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.4.0'
+VERSION = '0.4.1'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -523,16 +523,29 @@ class Job:
             self.set('firmware', status='skipped')
         return ' · '.join(results) + ' · jetzt %s' % info.get('version')
 
-    def wait_reachable(self, api, minutes=5):
+    def wait_reachable(self, api, step='firmware', path='/system/info', minutes=5):
         deadline = time.time() + minutes * 60
         while True:
             try:
-                return api.call('GET', '/system/info', quiet=True)
+                return api.call('GET', path, quiet=True)
             except StepError as e:
                 if (e.code and e.code < 500) or time.time() > deadline:
                     raise
-                self.set('firmware', detail='Warte auf Kamera ...', progress=None)
+                self.set(step, detail='Warte auf Kamera (%s) ...' % bare_ip(self.ip), progress=None)
                 self.sleep(5)
+
+    def wait_stable(self, step, ip, timeout_s):
+        deadline = time.time() + timeout_s
+        ok = 0
+        while time.time() < deadline:
+            if not ok:
+                flush_arp(ip)
+            ok = ok + 1 if port_open(ip) else 0
+            self.set(step, detail='Warte auf %s ...%s' % (bare_ip(ip), ' (antwortet, prüfe ob stabil)' if ok else ''))
+            if ok >= 4:
+                return
+            self.sleep(3)
+        raise StepError('%s antwortet nicht stabil (Timeout nach %d s)' % (bare_ip(ip), timeout_s))
 
     def check_for_update(self, api):
         for attempt in range(6):
@@ -654,23 +667,15 @@ class Job:
         target = profile()['ip']
         self.ip = target
         check_route(target)
-        deadline = time.time() + config['ip_change_timeout_s']
-        while time.time() < deadline:
-            self.set('newip', detail='Warte auf %s ...' % bare_ip(target))
-            flush_arp(target)
-            if port_open(target):
-                break
-            self.sleep(3)
-        else:
-            raise StepError('%s antwortet nicht (Timeout nach %d s)' % (bare_ip(target), config['ip_change_timeout_s']))
+        self.wait_stable('newip', target, config['ip_change_timeout_s'])
         api = self.api()
         backup = load_backup()
         diffs = []
         for key, expected in backup.items():
             path = '/' + key.replace(config['api_prefix'].strip('/') + '/', '', 1).lstrip('/')
-            actual = api.call('GET', path)
+            actual = self.wait_reachable(api, 'newip', path)
             diffs += [key.split('/')[-2] + p for p in compare(expected, actual)]
-        net = api.call('GET', '/network/settings')
+        net = self.wait_reachable(api, 'newip', '/network/settings')
         lan = net.get('lan', {}) if isinstance(net, dict) else {}
         if lan.get('address') != bare_ip(target):
             raise StepError('Kamera meldet IP %s statt %s' % (lan.get('address'), bare_ip(target)))
@@ -682,8 +687,9 @@ class Job:
 
     def do_verify(self):
         api = self.api()
-        info = api.call('GET', '/system/info')
-        name = api.call('GET', '/system/settings/')
+        self.wait_stable('verify', self.ip, config['ip_change_timeout_s'])
+        info = self.wait_reachable(api, 'verify', '/system/info')
+        name = self.wait_reachable(api, 'verify', '/system/settings/')
         problems = []
         if isinstance(name, dict) and name.get('name') != profile()['name']:
             problems.append('Name „%s“' % name.get('name'))
