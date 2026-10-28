@@ -377,8 +377,9 @@ def run_update(ip):
                 if not avail:
                     break
                 set_cam(ip, status='updating', detail=detail('starting_update', avail), progress=0)
+                before = info.get('version')
                 fmt = perform_update(ip, api, avail, avail)
-                if not wait_update_done(ip, api):
+                if not wait_update_done(ip, api, before):
                     rounds.append('%s rejected by camera' % avail)
                     api, info, avail = recheck(ip)
                     break
@@ -461,7 +462,7 @@ def perform_update(ip, api, version, raw):
     raise CameraError('all_formats_rejected', ', '.join(tried), code=400)
 
 
-def wait_update_done(ip, api):
+def wait_update_done(ip, api, before=None):
     started = time.time()
     deadline = started + config['update_timeout_min'] * 60
     active, ready, rejected = False, 0, 0
@@ -477,6 +478,12 @@ def wait_update_done(ip, api):
             active, ready = True, 0
             continue
         phase = prog.get('phase') if isinstance(prog, dict) else None
+        version = info.get('version') if isinstance(info, dict) else None
+        if before and version and version != before and not info.get('software_down'):
+            ready += 1
+            if ready >= 3:
+                return True
+            continue
         if phase in ('starting', 'downloading', 'installing'):
             active, ready, rejected = True, 0, 0
         elif isinstance(prog, dict) and prog.get('error'):

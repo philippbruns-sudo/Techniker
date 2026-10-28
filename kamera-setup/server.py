@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.4.6'
+VERSION = '0.4.7'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -547,12 +547,13 @@ class Job:
                 break
             self.set('firmware', detail='%sUpdate %s wird installiert ...' % (prefix, offered), progress=0)
             body = {'version': offered} if config['perform_update_body'] == 'json' else offered
+            before = (self.wait_reachable(api) or {}).get('version')
             try:
                 api.call('POST', '/system/actions/perform_update', body, timeout=60)
             except StepError as e:
                 if e.code:
                     raise
-            if not self.wait_update_done(api, prefix + offered):
+            if not self.wait_update_done(api, prefix + offered, before):
                 results.append('%s%s von Kamera abgelehnt (Fehler: %s)' % (prefix, offered, getattr(self, 'update_error', '?')))
                 break
             results.append('%s%s installiert' % (prefix, offered))
@@ -614,7 +615,7 @@ class Job:
         self.update_note = ' (Update-Prüfung nicht möglich)'
         return None
 
-    def wait_update_done(self, api, label):
+    def wait_update_done(self, api, label, before=None):
         started = time.time()
         deadline = started + config['update_timeout_min'] * 60
         phases = {'starting': 'Startet', 'downloading': 'Lädt herunter', 'installing': 'Installiert', 'finished': 'Abgeschlossen'}
@@ -632,6 +633,13 @@ class Job:
                 self.set('firmware', detail='%s – Kamera startet neu ... (%s)' % (label, elapsed), progress=None)
                 continue
             phase = prog.get('phase') if isinstance(prog, dict) else None
+            version = info.get('version') if isinstance(info, dict) else None
+            if before and version and version != before and not info.get('software_down'):
+                ready += 1
+                self.set('firmware', detail='%s – jetzt %s, prüfe ob stabil ... (%s)' % (label, version, elapsed), progress=None)
+                if ready >= 3:
+                    return True
+                continue
             if phase in ('starting', 'downloading', 'installing'):
                 active, ready, rejected = True, 0, 0
             elif isinstance(prog, dict) and prog.get('error'):
