@@ -12,10 +12,11 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.4.1'
+VERSION = '0.4.2'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -372,7 +373,8 @@ def compare(expected, actual, path=''):
         if not isinstance(actual, dict):
             return [path or '/']
         for k, v in expected.items():
-            diffs += compare(v, actual.get(k), path + '/' + str(k))
+            if k in actual:
+                diffs += compare(v, actual[k], path + '/' + str(k))
     elif isinstance(expected, (int, float)) and isinstance(actual, (int, float)) and not isinstance(expected, bool):
         if abs(expected - actual) > 1e-6:
             diffs.append(path)
@@ -670,6 +672,7 @@ class Job:
         self.wait_stable('newip', target, config['ip_change_timeout_s'])
         api = self.api()
         backup = load_backup()
+        tz_note = self.fix_timezone(api, backup)
         diffs = []
         for key, expected in backup.items():
             path = '/' + key.replace(config['api_prefix'].strip('/') + '/', '', 1).lstrip('/')
@@ -682,8 +685,36 @@ class Job:
         self.cam(ip=bare_ip(target))
         if diffs:
             self.cam(backup_diffs=diffs[:20])
-            return '%s antwortet · %d Abweichung(en): %s' % (bare_ip(target), len(diffs), ', '.join(diffs[:3]))
-        return '%s antwortet, Einstellungen stimmen mit dem Backup überein' % bare_ip(target)
+            return '%s antwortet · %d Abweichung(en): %s%s' % (bare_ip(target), len(diffs), ', '.join(diffs[:6]), tz_note)
+        return '%s antwortet, Einstellungen stimmen mit dem Backup überein%s' % (bare_ip(target), tz_note)
+
+    def fix_timezone(self, api, backup):
+        wanted = (backup.get('api/v2/base/settings') or {}).get('timezone')
+        if not wanted:
+            return ''
+        current = (self.wait_reachable(api, 'newip', '/base/settings') or {}).get('timezone')
+        name = wanted.split(' (')[0]
+        if current and current.split(' (')[0] == name:
+            if current != wanted:
+                backup['api/v2/base/settings']['timezone'] = current
+            return ''
+        variants = [name]
+        try:
+            offset = datetime.now(ZoneInfo(name)).utcoffset()
+            minutes = int(offset.total_seconds() // 60)
+            variants.insert(0, '%s (UTC%s%d:%02d)' % (name, '-' if minutes < 0 else '+', abs(minutes) // 60, abs(minutes) % 60))
+        except Exception:
+            pass
+        for value in variants:
+            try:
+                api.call('POST', '/base/settings', {'timezone': value})
+                current = api.call('GET', '/base/settings').get('timezone')
+            except StepError:
+                continue
+            if current and current.split(' (')[0] == name:
+                backup['api/v2/base/settings']['timezone'] = current
+                return ' · Zeitzone %s gesetzt' % current
+        return ' · Zeitzone %s nicht übernommen' % name
 
     def do_verify(self):
         api = self.api()
