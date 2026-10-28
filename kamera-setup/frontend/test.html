@@ -88,6 +88,12 @@
         </div>
         <label class="switch"><input type="checkbox" id="sInternet"> Internet (Firmware-Update) – kamera-internet.sh --on nötig</label>
         <div class="hint">Backup-Dateien in <span class="mono">backups/</span>: <span id="backups">–</span></div>
+        <label>Backup hochladen</label>
+        <div class="row" style="grid-template-columns: 1fr auto; align-items: center;">
+          <input type="file" id="backupFile" accept=".json,application/json">
+          <button class="btn btn-sec" onclick="uploadBackup()">Hochladen</button>
+        </div>
+        <div class="hint">Wird als <span class="mono">backup.json</span> gespeichert (gilt für CAM 1 und CAM 2).</div>
         <div style="margin-top:10px"><button class="btn btn-primary" onclick="saveSettings()">Speichern</button></div>
       </div>
     </div>
@@ -172,6 +178,17 @@ function render() {
       '<div class="hint">' + esc(e.url.match(/^http:\/\/([^/]+)/)[1]) + '</div></td><td class="mono resp">' + esc(e.sent) +
       '</td><td class="' + (good ? 'st-ok' : 'st-bad') + '">' + esc(e.status) + '</td><td class="mono resp">' + esc(e.response) + '</td></tr>';
   }).join('') || '<tr><td colspan="5" class="hint">Noch keine Anfragen.</td></tr>';
+}
+
+function uploadBackup() {
+  var f = document.getElementById('backupFile').files[0];
+  if (!f) { alert('Bitte zuerst eine Backup-Datei auswählen.'); return; }
+  f.text().then(function(text) {
+    return post('/api/test/backup', { name: 'backup.json', content: text });
+  }).then(function(r) {
+    if (r && r.ok) alert('Gespeichert als ' + r.saved + ' (' + r.sections.join(', ') + ')');
+    document.getElementById('backupFile').value = '';
+  });
 }
 
 function runStep(key) { post('/api/test/run', { step: key }); }

@@ -46,7 +46,6 @@ sudo bash ~/Techniker/kamera-setup/pi/kamera-internet.sh --off
 
 ```bash
 cd ~/Techniker && git pull
-mkdir -p ~/Techniker/kamera-setup/backups           # Backup-Datei hier ablegen: backup.json
 sudo python3 ~/Techniker/kamera-setup/server.py --manual
 ```
 
@@ -59,7 +58,11 @@ sudo python3 ~/Techniker/kamera-setup/server.py --manual
 Einrichtung von selbst, sobald eine Kamera auf der Werks-IP antwortet. `sudo` wird gebraucht,
 um vor dem Anmelden den ARP-Cache zu leeren (MAC der richtigen Kamera).
 
-Beim ersten Start entsteht `config.json` (nicht im Repo). Im Testmodus unter **Einstellungen**
+**Backup:** im Testmodus unter Einstellungen **„Backup hochladen“** – wird als
+`backups/backup.json` gespeichert und vorher geprüft (gültiges JSON mit Netzwerk-Einstellungen).
+
+Beim ersten Start entsteht `config.json` (nicht im Repo). Dateien, die der Server mit `sudo`
+anlegt, gehören danach trotzdem dem normalen Benutzer. Im Testmodus unter **Einstellungen**
 das **neue Kamera-Passwort** eintragen. Ein Backup reicht für beide Profile – die IP
 (`.21` bzw. `.22`) wird beim Einspielen automatisch gesetzt.
 

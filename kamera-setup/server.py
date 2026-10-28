@@ -15,7 +15,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.1.1'
+VERSION = '0.1.2'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -72,6 +72,17 @@ class Cancelled(Exception):
     pass
 
 
+def give_back(path):
+    uid, gid = os.environ.get('SUDO_UID'), os.environ.get('SUDO_GID')
+    if os.geteuid() != 0 or not uid or not os.path.exists(path):
+        return
+    for p in [path] + ([os.path.join(path, n) for n in os.listdir(path)] if os.path.isdir(path) else []):
+        try:
+            os.chown(p, int(uid), int(gid or uid))
+        except OSError:
+            pass
+
+
 def load_config():
     cfg = copy.deepcopy(DEFAULT_CONFIG)
     if os.path.exists(CONFIG_FILE):
@@ -83,6 +94,7 @@ def load_config():
 def save_config():
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
+    give_back(CONFIG_FILE)
 
 
 def profile():
@@ -543,6 +555,7 @@ def write_log(job, result, message):
             if new:
                 w.writeheader()
             w.writerow(row)
+        give_back(DATA_DIR)
 
 
 def stats_today():
@@ -706,6 +719,22 @@ class Handler(BaseHTTPRequestHandler):
             with lock:
                 job.http_log.clear()
             return self.send_json({'ok': True})
+        if path == '/api/test/backup':
+            name = os.path.basename(str(data.get('name') or 'backup.json'))
+            if not name.lower().endswith('.json'):
+                return self.send_json({'error': 'Bitte eine .json-Datei wählen'}, 400)
+            try:
+                content = json.loads(data.get('content') or '')
+            except ValueError as e:
+                return self.send_json({'error': 'Datei ist kein gültiges JSON: %s' % e}, 400)
+            if not isinstance(content, dict) or 'lan' not in (content.get('api/v2/network/settings') or {}):
+                return self.send_json({'error': 'Kein ARVOO-Backup: api/v2/network/settings.lan fehlt'}, 400)
+            folder = os.path.join(BASE_DIR, config['backup_dir'])
+            os.makedirs(folder, exist_ok=True)
+            with open(os.path.join(folder, name), 'w', encoding='utf-8') as f:
+                json.dump(content, f, ensure_ascii=False)
+            give_back(folder)
+            return self.send_json({'ok': True, 'saved': name, 'sections': [k.split('/')[-2] for k in content]})
         if path == '/api/settings':
             for key in ('factory_ip', 'api_prefix', 'user', 'interface', 'backup_mode', 'perform_update_body'):
                 if key in data:
@@ -737,6 +766,7 @@ def main():
     if not os.path.exists(CONFIG_FILE):
         save_config()
     os.makedirs(os.path.join(BASE_DIR, config['backup_dir']), exist_ok=True)
+    give_back(os.path.join(BASE_DIR, config['backup_dir']))
     job = Job()
     auto_detect = not args.manual
     threading.Thread(target=detector, daemon=True).start()
