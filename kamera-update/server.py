@@ -310,9 +310,8 @@ def client_for(cam):
 def offered_update(value):
     if isinstance(value, dict):
         value = value.get('update_available')
-    if not value or str(value).strip().lower() in ('false', 'none', 'no', '0', 'null'):
-        return None
-    return str(value).strip()
+    value = str(value or '').strip()
+    return value if re.match(r'^v?\d+(\.\d+)+\S*$', value) else None
 
 
 def set_cam(ip, **fields):

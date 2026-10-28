@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.4.2'
+VERSION = '0.4.3'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -506,7 +506,7 @@ class Job:
             self.set('firmware', detail=prefix + 'Suche nach Update ...', progress=None)
             offered = self.check_for_update(api)
             if not offered:
-                results.append(prefix + 'kein Update')
+                results.append(prefix + 'kein Update' + self.update_note)
                 break
             self.set('firmware', detail='%sUpdate %s wird installiert ...' % (prefix, offered), progress=0)
             body = {'version': offered} if config['perform_update_body'] == 'json' else offered
@@ -550,19 +550,25 @@ class Job:
         raise StepError('%s antwortet nicht stabil (Timeout nach %d s)' % (bare_ip(ip), timeout_s))
 
     def check_for_update(self, api):
+        self.update_note = ''
         for attempt in range(6):
             try:
                 answer = api.call('POST', '/system/actions/check_update', timeout=60)
                 offered = answer.get('update_available') if isinstance(answer, dict) else answer
-                if not offered or str(offered).strip().lower() in ('false', 'none', 'null', '0'):
+                offered = str(offered or '').strip()
+                if not re.match(r'^v?\d+(\.\d+)+\S*$', offered):
                     return None
-                return str(offered).strip()
+                return offered
             except StepError as e:
-                if e.code and 400 <= e.code < 500:
+                if e.code == 401:
                     raise
+                if e.code and 400 <= e.code < 500:
+                    self.update_note = ' (Kamera meldet HTTP %s)' % e.code
+                    return None
                 self.set('firmware', detail='Kamera noch nicht bereit, neuer Versuch ...')
                 self.sleep(10)
-        raise StepError('Update-Prüfung nicht möglich – Kamera antwortet nicht')
+        self.update_note = ' (Update-Prüfung nicht möglich)'
+        return None
 
     def wait_update_done(self, api, label):
         started = time.time()
