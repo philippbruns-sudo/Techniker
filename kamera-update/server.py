@@ -379,7 +379,10 @@ def run_update(ip):
                     break
                 set_cam(ip, status='updating', detail=detail('starting_update', avail), progress=0)
                 fmt = perform_update(ip, api, avail, avail)
-                wait_update_done(ip, api)
+                if not wait_update_done(ip, api):
+                    rounds.append('%s rejected by camera' % avail)
+                    api, info, avail = recheck(ip)
+                    break
                 rounds.append(avail)
                 set_cam(ip, last_update=now())
                 set_cam(ip, status='updating', detail=detail('rechecking'), progress=None)
@@ -462,7 +465,7 @@ def perform_update(ip, api, version, raw):
 def wait_update_done(ip, api):
     started = time.time()
     deadline = started + config['update_timeout_min'] * 60
-    active, ready = False, 0
+    active, ready, rejected = False, 0, 0
     while time.time() < deadline:
         time.sleep(1 if DEMO else 4)
         try:
@@ -475,16 +478,19 @@ def wait_update_done(ip, api):
             active, ready = True, 0
             continue
         phase = prog.get('phase') if isinstance(prog, dict) else None
-        if isinstance(prog, dict) and prog.get('error'):
-            raise CameraError('update_error')
         if phase in ('starting', 'downloading', 'installing'):
-            active, ready = True, 0
+            active, ready, rejected = True, 0, 0
+        elif isinstance(prog, dict) and prog.get('error'):
+            rejected += 1
+            if rejected >= 3:
+                return False
+            continue
         pct = prog.get('percent') if isinstance(prog, dict) else None
         set_cam(ip, detail=detail('phase', phase or 'running'), progress=pct if isinstance(pct, (int, float)) else None)
         settled = phase == 'finished' and not (isinstance(info, dict) and info.get('software_down'))
         ready = ready + 1 if settled and (active or time.time() - started > (8 if DEMO else 60)) else 0
         if ready >= 3:
-            return
+            return True
     raise CameraError('timeout', config['update_timeout_min'])
 
 

@@ -342,7 +342,9 @@ class Job:
             self.set('firmware', detail='%sUpdate %s wird installiert ...' % (prefix, offered), progress=0)
             body = {'version': offered} if config['perform_update_body'] == 'json' else offered
             api.call('POST', '/system/actions/perform_update', body)
-            self.wait_update_done(api, prefix + offered)
+            if not self.wait_update_done(api, prefix + offered):
+                results.append('Runde %d: %s von Kamera abgelehnt' % (round_no, offered))
+                break
             results.append('Runde %d: %s installiert' % (round_no, offered))
         info = api.call('GET', '/system/info')
         self.cam(version_after=info.get('version'))
@@ -369,7 +371,7 @@ class Job:
         started = time.time()
         deadline = started + config['update_timeout_min'] * 60
         phases = {'starting': 'Startet', 'downloading': 'Lädt herunter', 'installing': 'Installiert', 'finished': 'Abgeschlossen'}
-        active, ready = False, 0
+        active, ready, rejected = False, 0, 0
         while time.time() < deadline:
             self.sleep(4)
             elapsed = '%d:%02d min' % divmod(int(time.time() - started), 60)
@@ -383,10 +385,15 @@ class Job:
                 self.set('firmware', detail='%s – Kamera startet neu ... (%s)' % (label, elapsed), progress=None)
                 continue
             phase = prog.get('phase') if isinstance(prog, dict) else None
-            if isinstance(prog, dict) and prog.get('error'):
-                raise StepError('Update %s fehlgeschlagen (update_progress meldet Fehler)' % label)
             if phase in ('starting', 'downloading', 'installing'):
-                active, ready = True, 0
+                active, ready, rejected = True, 0, 0
+            elif isinstance(prog, dict) and prog.get('error'):
+                rejected += 1
+                self.set('firmware', detail='%s – Kamera meldet Fehler, prüfe ... (%s)' % (label, elapsed), progress=None)
+                if rejected >= 3:
+                    self.set('firmware', progress=None)
+                    return False
+                continue
             pct = prog.get('percent') if isinstance(prog, dict) else None
             self.set('firmware', detail='%s – %s ... (%s)' % (label, phases.get(phase, phase or 'Läuft'), elapsed),
                      progress=pct if isinstance(pct, (int, float)) else None)
@@ -394,7 +401,7 @@ class Job:
             ready = ready + 1 if settled and (active or time.time() - started > 60) else 0
             if ready >= 3:
                 self.set('firmware', progress=None)
-                return
+                return True
         raise StepError('Zeitüberschreitung: Update %s nach %d min nicht abgeschlossen' % (label, config['update_timeout_min']))
 
     def do_password(self):
