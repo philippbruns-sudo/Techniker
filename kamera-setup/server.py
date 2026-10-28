@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.4.3'
+VERSION = '0.4.4'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -297,6 +297,30 @@ def drop_temp_routes():
             run_ip('addr', 'del', src + '/32', 'dev', config['interface'])
 
 
+def internet_problem():
+    if bare_ip(config['factory_ip']).startswith('127.') or os.geteuid() != 0:
+        return None
+    res = run_ip('-4', 'addr', 'show', 'dev', config['interface'])
+    if not res or (' %s/' % config['factory_gateway']) not in res.stdout:
+        return '%s hat %s nicht' % (config['interface'], config['factory_gateway'])
+    try:
+        with open('/proc/sys/net/ipv4/ip_forward') as f:
+            if f.read().strip() != '1':
+                return 'Weiterleitung aus'
+    except OSError:
+        pass
+    try:
+        if subprocess.run(['nft', 'list', 'table', 'inet', 'kamera_setup'], capture_output=True, timeout=5).returncode != 0:
+            return 'NAT-Regeln nicht geladen'
+    except (OSError, subprocess.SubprocessError):
+        return 'nftables fehlt'
+    try:
+        socket.create_connection(('1.1.1.1', 443), timeout=4).close()
+    except OSError:
+        return 'Pi selbst hat kein Internet'
+    return None
+
+
 class Sniffer:
     def __init__(self):
         self.seen = {}
@@ -499,6 +523,9 @@ class Job:
         if not config['internet']:
             self.set('firmware', status='skipped')
             return 'Übersprungen (Internet in den Einstellungen aus)'
+        problem = internet_problem()
+        if problem:
+            raise StepError('Kein Internet für die Kamera: %s – sudo bash ~/Techniker/kamera-setup/pi/kamera-internet.sh --status' % problem)
         api = self.api()
         results = []
         for round_no in range(1, UPDATE_ROUNDS + 1):
@@ -551,14 +578,10 @@ class Job:
 
     def check_for_update(self, api):
         self.update_note = ''
-        for attempt in range(6):
+        no_update = 0
+        for attempt in range(8):
             try:
                 answer = api.call('POST', '/system/actions/check_update', timeout=60)
-                offered = answer.get('update_available') if isinstance(answer, dict) else answer
-                offered = str(offered or '').strip()
-                if not re.match(r'^v?\d+(\.\d+)+\S*$', offered):
-                    return None
-                return offered
             except StepError as e:
                 if e.code == 401:
                     raise
@@ -567,6 +590,17 @@ class Job:
                     return None
                 self.set('firmware', detail='Kamera noch nicht bereit, neuer Versuch ...')
                 self.sleep(10)
+                continue
+            offered = answer.get('update_available') if isinstance(answer, dict) else answer
+            offered = str(offered or '').strip()
+            if re.match(r'^v?\d+(\.\d+)+\S*$', offered):
+                return offered
+            no_update += 1
+            self.update_note = ' (Antwort: %s)' % clean(json.dumps(answer, ensure_ascii=False))[:80]
+            if no_update >= 3:
+                return None
+            self.set('firmware', detail='Kamera meldet kein Update – frage in 20 s erneut (%d/3) ...' % no_update)
+            self.sleep(20)
         self.update_note = ' (Update-Prüfung nicht möglich)'
         return None
 
