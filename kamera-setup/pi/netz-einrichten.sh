@@ -4,7 +4,7 @@
 # Problem: Das Firmen-WLAN nutzt 192.168.8.0/24 – denselben Bereich wie die
 # Kameras nach dem Backup (192.168.8.21 / .22).
 # Lösung:  eth0 bekommt
-#   - 192.168.0.250/24   für Kameras im Werkszustand (192.168.0.21)
+#   - 192.168.0.250/24   für Kameras im Werkszustand (192.168.0.240)
 #   - 192.168.8.250/32   nur als Absender, ohne Netz-Route
 #   - Host-Routen für .21 und .22 über eth0 (haben Vorrang vor dem WLAN-/24),
 #     gesetzt von einem NetworkManager-Hook, sobald ein Kabel steckt
@@ -40,7 +40,7 @@ check() {
     echo "Prüfung:"
     if ip -br addr show "$IFACE" | grep -q "192.168.0.250"; then ok "$IFACE hat 192.168.0.250"; else warn "$IFACE hat 192.168.0.250 nicht (Kabel gesteckt?)"; fi
     if ip -br addr show "$IFACE" | grep -q "$SRC_ADDR"; then ok "$IFACE hat $SRC_ADDR"; else warn "$IFACE hat $SRC_ADDR nicht (Kabel gesteckt?)"; fi
-    for ip in 192.168.0.21 $CAMERA_IPS; do
+    for ip in 192.168.0.240 $CAMERA_IPS; do
         dev=$(route_dev "$ip")
         if [ "$dev" = "$IFACE" ]; then ok "$ip läuft über $IFACE"; else warn "$ip läuft über '${dev:-?}' statt $IFACE"; fi
     done

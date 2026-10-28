@@ -14,7 +14,7 @@ Das Firmen-WLAN nutzt **192.168.8.0/24** – denselben Bereich wie die Kameras n
 
 | eth0 bekommt | Zweck |
 |---|---|
-| `192.168.0.250/24` | Kameras im Werkszustand (`192.168.0.21`) |
+| `192.168.0.250/24` | Kameras im Werkszustand (`192.168.0.240`) |
 | `192.168.8.250/32` | nur Absender-Adresse, ohne Netz-Route (vorher geprüft, dass sie im WLAN frei ist) |
 | Host-Routen `192.168.8.21/32`, `192.168.8.22/32` | haben Vorrang vor dem WLAN-Netz; gesetzt per NetworkManager-Hook, sobald ein Kabel steckt |
 
@@ -29,10 +29,15 @@ sudo bash ~/Techniker/kamera-setup/pi/netz-einrichten.sh --remove   # rückgäng
 
 ## Ablauf pro Kamera
 
+Bestätigt an einer Ruby LR (Firmware 4.96.1): Werks-IP `192.168.0.240`, API direkt auf **Port 80**
+(`http://<ip>/api/v2/...`; Port 577 gibt es nur über die Portweiterleitung im Feld),
+Benutzer `user`, Passwort = letzte 4 Zeichen der MAC in Großbuchstaben. Die Seriennummer
+entspricht der MAC ohne Doppelpunkte.
+
 | # | Schritt | Kamera-API |
 |---|---|---|
-| 1 | Kamera auf Werks-IP finden (192.168.0.21, noch zu bestätigen) | `GET /system/info/up` |
-| 2 | MAC per ARP auslesen, Passwort = letzte 4 Zeichen, anmelden | `GET /system/info` |
+| 1 | Kamera auf Werks-IP finden (`192.168.0.240`, Port 80) | `GET /system/info/up` |
+| 2 | MAC per ARP auslesen, Passwort = letzte 4 Zeichen in **Großbuchstaben** (z. B. `A5CB`), anmelden | `GET /system/info` |
 | 3 | Passwort ändern (Body: `text/plain`, nur das neue Passwort) | `POST /system/actions/set_password` |
 | 4 | Name „CAM 1“ setzen und zurücklesen | `POST /api/v2/system/settings/` |
 | 5 | Backup einspielen (ANPR → Base → Netzwerk zuletzt) | `POST /system/actions/all_settings` |
