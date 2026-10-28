@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.4.7'
+VERSION = '0.4.8'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -669,6 +669,8 @@ class Job:
         old = self.password
         self.api().call('POST', '/system/actions/set_password', new, 'text/plain')
         self.password = new
+        self.sleep(3)
+        self.wait_ready('password')
         self.api().call('GET', '/system/info')
         try:
             Camera(self.ip, old, []).call('GET', '/system/info', quiet=True)
@@ -787,12 +789,41 @@ class Job:
             raise StepError('Abschlussprüfung: ' + ', '.join(problems))
         return 'Version %s · Name %s' % (info.get('version'), profile()['name'])
 
+    def wait_ready(self, key, timeout_s=None):
+        deadline = time.time() + (timeout_s or config['ip_change_timeout_s'])
+        ok = 0
+        while time.time() < deadline:
+            alive = port_open(self.ip, 2)
+            if alive and self.password:
+                try:
+                    self.api().call('GET', '/system/info', quiet=True, timeout=5)
+                except StepError as e:
+                    alive = e.code is not None and e.code < 500
+            ok = ok + 1 if alive else 0
+            if ok >= 3:
+                return
+            if not alive:
+                flush_arp(self.ip)
+            self.set(key, detail='Warte bis Kamera (%s) bereit ist ...' % bare_ip(self.ip))
+            self.sleep(2)
+        raise StepError('Kamera %s antwortet nicht (Timeout nach %d s)' % (bare_ip(self.ip), timeout_s or config['ip_change_timeout_s']))
+
     def run_step(self, key):
         with lock:
             st = self.step(key)
             st.update(status='running', detail='', progress=None)
         try:
-            detail = getattr(self, 'do_' + key)()
+            for attempt in range(3):
+                try:
+                    if key not in ('detect', 'newip'):
+                        self.wait_ready(key)
+                    detail = getattr(self, 'do_' + key)()
+                    break
+                except StepError as e:
+                    if attempt == 2 or (e.code is not None and e.code < 500):
+                        raise
+                    self.set(key, status='running', detail='Verbindung unterbrochen – neuer Versuch (%d/2) ...' % (attempt + 1))
+                    self.sleep(3)
             with lock:
                 if st['status'] == 'running':
                     st['status'] = 'done'
