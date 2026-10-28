@@ -60,9 +60,12 @@ MESSAGES = {
     'all_formats_rejected': 'Camera rejects all formats for perform_update ({0})',
     'update_error': 'Update failed (update_progress reports an error)',
     'timeout': 'Timeout: version unchanged after {0} min',
+    'rechecking': 'Checking for further updates ...',
+    'too_many_rounds': 'Still a newer version after {0} updates - please check',
 }
 
 UPDATE_FORMATS = ['json', 'json_string', 'form', 'query', 'json_raw', 'text', 'raw', 'none']
+MAX_UPDATE_ROUNDS = 5
 PHASES = ('starting', 'downloading', 'installing', 'finished')
 
 DEMO = False
@@ -371,15 +374,25 @@ def run_update(ip):
                 entry.update(version_after=before or '', result=RESULT_CURRENT)
                 return
 
-            set_cam(ip, status='updating', detail=detail('starting_update', avail), progress=0)
-            raw = cameras[ip].get('update_raw') or avail
-            fmt = perform_update(ip, api, avail, raw)
-            entry['message'] = 'Format: %s' % fmt
-
-            version = wait_for_update(ip, api, before)
-            entry.update(version_after=version, result=RESULT_SUCCESS)
-            set_cam(ip, version=version, update_available=None, last_update=now(),
-                    status='current', detail=detail('updated', version), progress=None)
+            chain = [before]
+            fmt = None
+            for _ in range(MAX_UPDATE_ROUNDS):
+                set_cam(ip, status='updating', detail=detail('starting_update', avail), progress=0)
+                raw = cameras[ip].get('update_raw') or avail
+                fmt = perform_update(ip, api, avail, raw)
+                version = wait_for_update(ip, api, chain[-1])
+                chain.append(version)
+                entry.update(version_after=version, message='Format: %s · %s' % (fmt, ' → '.join(chain)))
+                set_cam(ip, version=version, last_update=now())
+                set_cam(ip, status='updating', detail=detail('rechecking'), progress=None)
+                api, info, avail = recheck(ip)
+                if not avail:
+                    break
+            else:
+                raise CameraError('too_many_rounds', MAX_UPDATE_ROUNDS)
+            entry.update(result=RESULT_SUCCESS)
+            set_cam(ip, version=chain[-1], update_available=None, status='current',
+                    detail=detail('updated', chain[-1]), progress=None)
         except CameraError as e:
             entry.update(result=RESULT_FAILED, message=str(e))
             set_cam(ip, progress=None, **error_fields(e))
@@ -388,6 +401,17 @@ def run_update(ip):
             write_log(entry)
             set_cam(ip, busy=False)
             save_cameras()
+
+
+def recheck(ip):
+    for _ in range(6):
+        try:
+            return check(ip)
+        except CameraError as e:
+            if e.code and 400 <= e.code < 500:
+                raise
+            time.sleep(1 if DEMO else 10)
+    return check(ip)
 
 
 def send_perform_update(api, fmt, version, raw):

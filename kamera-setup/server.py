@@ -54,6 +54,8 @@ STEPS = [
     ('verify', 'Abschlussprüfung'),
 ]
 
+MAX_UPDATE_ROUNDS = 5
+
 LOG_FIELDS = ['time', 'profile', 'name', 'mac', 'serial', 'ip', 'version_before', 'version_after',
               'license', 'result', 'message']
 
@@ -335,19 +337,46 @@ class Job:
             self.set('firmware', status='skipped')
             return 'Übersprungen (Internet in den Einstellungen aus)'
         api = self.api()
-        answer = api.call('POST', '/system/actions/check_update', timeout=60)
-        info = api.call('GET', '/system/info')
-        before = info.get('version')
-        target = version_of(answer.get('update_available') if isinstance(answer, dict) else answer) \
-            or version_of(info.get('update_available'))
-        if not target or target == before:
-            self.cam(version_after=before)
-            self.set('firmware', status='skipped')
-            return 'Version %s ist aktuell' % before
-        self.target_version = target
-        body = {'version': target} if config['perform_update_body'] == 'json' else target
-        self.set('firmware', detail='Update auf %s wird gestartet ...' % target, progress=0)
-        api.call('POST', '/system/actions/perform_update', body)
+        first = None
+        history = []
+        for round_no in range(1, MAX_UPDATE_ROUNDS + 1):
+            self.set('firmware', detail='Suche nach Updates%s ...' % (' (Runde %d)' % round_no if round_no > 1 else ''), progress=None)
+            current, target = self.check_for_update(api)
+            first = first or current
+            if not target or target == current:
+                self.cam(version_after=current)
+                if not history:
+                    self.set('firmware', status='skipped')
+                    return 'Version %s ist aktuell' % current
+                return 'Version %s → %s (%d Update%s), danach kein weiteres Update' % (
+                    first, current, len(history), '' if len(history) == 1 else 's')
+            self.target_version = target
+            prefix = 'Runde %d: ' % round_no if round_no > 1 else ''
+            self.set('firmware', detail='%sUpdate %s → %s wird gestartet ...' % (prefix, current, target), progress=0)
+            body = {'version': target} if config['perform_update_body'] == 'json' else target
+            api.call('POST', '/system/actions/perform_update', body)
+            new_version = self.wait_for_update(api, current, target, prefix)
+            history.append(new_version)
+            self.cam(version_after=new_version)
+        raise StepError('Nach %d Updates gibt es immer noch ein neueres – bitte prüfen' % MAX_UPDATE_ROUNDS)
+
+    def check_for_update(self, api):
+        for attempt in range(6):
+            try:
+                answer = api.call('POST', '/system/actions/check_update', timeout=60)
+                info = api.call('GET', '/system/info')
+                current = info.get('version')
+                target = version_of(answer.get('update_available') if isinstance(answer, dict) else answer) \
+                    or version_of(info.get('update_available'))
+                return current, target
+            except StepError as e:
+                if e.code and 400 <= e.code < 500:
+                    raise
+                self.set('firmware', detail='Kamera noch nicht bereit, neuer Versuch ...')
+                self.sleep(10)
+        raise StepError('Update-Prüfung nicht möglich – Kamera antwortet nicht')
+
+    def wait_for_update(self, api, before, target, prefix):
         deadline = time.time() + config['update_timeout_min'] * 60
         phases = {'starting': 'Startet', 'downloading': 'Lädt herunter', 'installing': 'Installiert', 'finished': 'Abgeschlossen'}
         while time.time() < deadline:
@@ -356,21 +385,20 @@ class Job:
                 prog = api.call('GET', '/system/info/update_progress', quiet=True)
                 if isinstance(prog, dict):
                     if prog.get('error'):
-                        raise StepError('Update fehlgeschlagen (update_progress meldet Fehler)')
+                        raise StepError('Update auf %s fehlgeschlagen (update_progress meldet Fehler)' % target)
                     pct = prog.get('percent')
-                    self.set('firmware', detail='%s %s ...' % (phases.get(prog.get('phase'), prog.get('phase') or 'Läuft'), target),
+                    self.set('firmware', detail='%s%s %s ...' % (prefix, phases.get(prog.get('phase'), prog.get('phase') or 'Läuft'), target),
                              progress=pct if isinstance(pct, (int, float)) else None)
                 info = api.call('GET', '/system/info', quiet=True)
             except StepError as e:
                 if e.code and 400 <= e.code < 500:
                     raise
-                self.set('firmware', detail='Kamera startet neu ...', progress=None)
+                self.set('firmware', detail='%sKamera startet neu ...' % prefix, progress=None)
                 continue
             version = info.get('version') if isinstance(info, dict) else None
             if version and version != before:
-                self.cam(version_after=version)
                 self.set('firmware', progress=None)
-                return 'Version %s → %s' % (before, version)
+                return version
         raise StepError('Zeitüberschreitung: Version nach %d min unverändert' % config['update_timeout_min'])
 
     def do_password(self):
