@@ -144,6 +144,9 @@ Schritt 4 (Name) und Schritt 6 (IP-Prüfung) richten sich nach dem gewählten Pr
 
 - Im Normalbetrieb fragt die Seite jede Sekunde das Backend ab.
 
+- Knopf **⛶ Vollbild** oben rechts blendet die Browser-Leisten aus (nur sichtbar, wenn der Browser
+  Vollbild unterstützt). Nach einem Neuladen der Seite muss er erneut gedrückt werden.
+
 ### Töne
 
 Damit man nicht ständig auf den Bildschirm schauen muss:

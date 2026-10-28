@@ -423,6 +423,7 @@
          onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='block';">
     <div id="logoFallback" class="logo-fallback">Smart Parking</div>
     <div class="header-right">
+      <button id="fsToggle" class="sound-toggle" onclick="toggleFullscreen()" style="display:none;"><span class="ico">⛶</span><span class="txt">Vollbild</span></button>
       <button id="soundToggle" class="sound-toggle" onclick="sound.toggle()"><span class="ico">🔊</span><span class="txt">Ton an</span></button>
       <div class="header-title">
         <h1>Kamera-Setup<span id="demoTag" class="demo-tag" style="display:none;">DEMO</span></h1>
@@ -1182,6 +1183,30 @@ function boot(attempt) {
 
 if (DEMO) startDemo();
 setTimeout(function() { boot(1); }, DEMO ? 1200 : 0);
+
+// ---------- Vollbild ----------
+function fullscreenElement() { return document.fullscreenElement || document.webkitFullscreenElement; }
+function toggleFullscreen() {
+  var el = document.documentElement;
+  if (fullscreenElement()) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    var req = el.requestFullscreen || el.webkitRequestFullscreen;
+    var p = req.call(el);
+    if (p && p.catch) p.catch(function() {});
+  }
+}
+function updateFullscreenButton() {
+  var btn = document.getElementById('fsToggle');
+  var on = !!fullscreenElement();
+  btn.querySelector('.ico').innerText = on ? '🗗' : '⛶';
+  btn.querySelector('.txt').innerText = on ? 'Vollbild aus' : 'Vollbild';
+}
+if (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen) {
+  document.getElementById('fsToggle').style.display = '';
+  document.addEventListener('fullscreenchange', updateFullscreenButton);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+}
 </script>
 </body>
 </html>
