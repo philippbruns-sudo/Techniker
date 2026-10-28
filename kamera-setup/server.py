@@ -15,7 +15,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.1.0'
+VERSION = '0.1.1'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -45,7 +45,6 @@ DEFAULT_CONFIG = {
 STEPS = [
     ('detect', 'Kamera suchen ({factory_ip})'),
     ('login', 'MAC auslesen & anmelden'),
-    ('license', 'Lizenz abrufen'),
     ('firmware', 'Firmware-Update'),
     ('password', 'Passwort ändern'),
     ('name', 'Name „{name}“ setzen'),
@@ -57,7 +56,7 @@ STEPS = [
 MAX_UPDATE_ROUNDS = 5
 
 LOG_FIELDS = ['time', 'profile', 'name', 'mac', 'serial', 'ip', 'version_before', 'version_after',
-              'license', 'result', 'message']
+              'result', 'message']
 
 lock = threading.RLock()
 config = {}
@@ -263,7 +262,6 @@ class Job:
         self.error = None
         self.cancel_flag = False
         self.target_version = None
-        self.license_ok = None
         self.steps = []
         for key, label in STEPS:
             self.steps.append({'key': key, 'label': label.format(factory_ip=config['factory_ip'], name=p['name'], ip=bare_ip(p['ip'])),
@@ -317,20 +315,6 @@ class Job:
         self.cam(serial=serial, model=info.get('model'), version_before=info.get('version'), ip=bare_ip(self.ip))
         note = '' if serial.upper() == mac.replace(':', '').upper() else ' (Seriennummer ≠ MAC)'
         return 'Angemeldet mit …%s · %s %s%s' % (self.password, info.get('model') or '', info.get('version') or '', note)
-
-    def do_license(self):
-        if not config['internet']:
-            self.set('license', status='skipped')
-            return 'Übersprungen (Internet in den Einstellungen aus)'
-        result = self.api().call('POST', '/system/actions/check_license', timeout=60)
-        ok = isinstance(result, dict) and result.get('ok') is True
-        self.license_ok = ok
-        self.cam(license='ok' if ok else 'fehlt')
-        if not ok:
-            msg = result.get('message') if isinstance(result, dict) else result
-            raise StepError('Lizenz nicht gültig: %s' % (msg or 'unbekannt'))
-        apps = ', '.join(k for k, v in (result.get('apps') or {}).items() if v.get('valid')) or '–'
-        return 'Lizenz gültig (%s)' % apps
 
     def do_firmware(self):
         if not config['internet']:
@@ -494,13 +478,10 @@ class Job:
             problems.append('Version %s statt %s' % (info.get('version'), self.target_version))
         if isinstance(name, dict) and name.get('name') != profile()['name']:
             problems.append('Name „%s“' % name.get('name'))
-        lic = info.get('license') or {}
-        if config['internet'] and not lic.get('ok'):
-            problems.append('Lizenz nicht ok')
-        self.cam(version_after=info.get('version'), license='ok' if lic.get('ok') else 'fehlt')
+        self.cam(version_after=info.get('version'))
         if problems:
             raise StepError('Abschlussprüfung: ' + ', '.join(problems))
-        return 'Version %s · Name %s · Lizenz %s' % (info.get('version'), profile()['name'], 'ok' if lic.get('ok') else '–')
+        return 'Version %s · Name %s' % (info.get('version'), profile()['name'])
 
     def run_step(self, key):
         with lock:
@@ -550,11 +531,15 @@ def write_log(job, result, message):
     row = {'time': now(), 'profile': profile()['id'], 'name': c.get('name') or profile()['name'],
            'mac': c.get('mac', ''), 'serial': c.get('serial', ''), 'ip': c.get('ip', ''),
            'version_before': c.get('version_before', ''), 'version_after': c.get('version_after', ''),
-           'license': c.get('license', ''), 'result': result, 'message': message}
+           'result': result, 'message': message}
     with lock:
         new = not os.path.exists(LOG_FILE)
+        fields = LOG_FIELDS
+        if not new:
+            with open(LOG_FILE, newline='', encoding='utf-8-sig') as f:
+                fields = next(csv.reader(f, delimiter=';'), LOG_FIELDS) or LOG_FIELDS
         with open(LOG_FILE, 'a', newline='', encoding='utf-8-sig' if new else 'utf-8') as f:
-            w = csv.DictWriter(f, fieldnames=LOG_FIELDS, delimiter=';')
+            w = csv.DictWriter(f, fieldnames=fields, delimiter=';', extrasaction='ignore', restval='')
             if new:
                 w.writeheader()
             w.writerow(row)

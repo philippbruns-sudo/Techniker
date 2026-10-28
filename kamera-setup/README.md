@@ -27,7 +27,7 @@ sudo bash ~/Techniker/kamera-setup/pi/netz-einrichten.sh --check    # prüfen (K
 sudo bash ~/Techniker/kamera-setup/pi/netz-einrichten.sh --remove   # rückgängig
 ```
 
-### Internet für die Kamera (Lizenz und Firmware-Update)
+### Internet für die Kamera (Firmware-Update)
 
 Im Werkszustand nutzt die Kamera Gateway und DNS `192.168.0.1`. `pi/kamera-internet.sh`
 lässt den Pi diese Rolle übernehmen – **nur nach Freigabe durch die IT einschalten**:
@@ -63,7 +63,7 @@ Beim ersten Start entsteht `config.json` (nicht im Repo). Im Testmodus unter **E
 das **neue Kamera-Passwort** eintragen. Ein Backup reicht für beide Profile – die IP
 (`.21` bzw. `.22`) wird beim Einspielen automatisch gesetzt.
 
-Protokoll: `data/setup_log.csv` (MAC, Seriennummer, IP, Firmware vorher/nachher, Lizenz, Ergebnis).
+Protokoll: `data/setup_log.csv` (MAC, Seriennummer, IP, Firmware vorher/nachher, Ergebnis).
 
 ## Ablauf pro Kamera
 
@@ -76,15 +76,14 @@ entspricht der MAC ohne Doppelpunkte.
 |---|---|---|---|
 | 1 | Kamera auf `192.168.0.240` finden | TCP Port 80 | ✅ bestätigt |
 | 2 | MAC aus ARP, Passwort = letzte 4 Zeichen groß, anmelden | `GET /system/info` | ✅ bestätigt |
-| 3 | Lizenz abrufen (Internet über den Pi) | `POST /system/actions/check_license` | ✅ bestätigt |
-| 4 | Firmware-Update, Fortschritt, Neustart abwarten | `check_update`, `perform_update` `{"version": …}`, `update_progress` | ✅ Format bestätigt (Update-Tool) |
-| 5 | Neues Passwort setzen, alt/neu prüfen | `POST /system/actions/set_password` (text/plain) | ⏳ an Kamera testen |
-| 6 | Name setzen und zurücklesen | `POST /system/settings/` `{"name": …}` | ⏳ an Kamera testen |
-| 7 | Backup einspielen (IP aus Profil) | `POST /system/actions/all_settings` oder Abschnitte einzeln | ⏳ an Kamera testen |
-| 8 | Auf neuer IP warten, alle Abschnitte mit Backup vergleichen | `GET` je Abschnitt | ⏳ an Kamera testen |
-| 9 | Abschlussprüfung: Version, Name, Lizenz | `GET /system/info`, `/system/settings/` | ⏳ an Kamera testen |
+| 3 | Firmware-Update (wiederholt, bis keine neuere Version mehr kommt) | `check_update`, `perform_update` `{"version": …}`, `update_progress` | ✅ Format bestätigt (Update-Tool) |
+| 4 | Neues Passwort setzen, alt/neu prüfen | `POST /system/actions/set_password` (text/plain) | ⏳ an Kamera testen |
+| 5 | Name setzen und zurücklesen | `POST /system/settings/` `{"name": …}` | ⏳ an Kamera testen |
+| 6 | Backup einspielen (IP aus Profil) | `POST /system/actions/all_settings` oder Abschnitte einzeln | ⏳ an Kamera testen |
+| 7 | Auf neuer IP warten, alle Abschnitte mit Backup vergleichen | `GET` je Abschnitt | ⏳ an Kamera testen |
+| 8 | Abschlussprüfung: Version, Name | `GET /system/info`, `/system/settings/` | ⏳ an Kamera testen |
 
-Lizenz und Update laufen **vor** dem Backup, solange die Kamera noch im Werksnetz hängt
+Das Update läuft **vor** dem Backup, solange die Kamera noch im Werksnetz hängt
 (dort kann der Pi Gateway spielen, siehe `kamera-internet.sh`).
 
 Name und Passwort sind nicht im Backup enthalten und werden davon nicht überschrieben.

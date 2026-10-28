@@ -1,6 +1,6 @@
 #!/bin/bash
-# Gibt Kameras am LAN-Port (eth0) Internetzugang über den Pi – für Lizenz
-# (check_license) und Firmware-Update (perform_update) während der Einrichtung.
+# Gibt Kameras am LAN-Port (eth0) Internetzugang über den Pi – für das
+# Firmware-Update (check_update / perform_update) während der Einrichtung.
 #
 # Kameras im Werkszustand: 192.168.0.240, Gateway 192.168.0.1, DNS 192.168.0.1.
 # Der Pi übernimmt 192.168.0.1:

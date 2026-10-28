@@ -86,7 +86,7 @@
             <select id="sBackupMode"><option value="all_settings">all_settings (eine Anfrage)</option><option value="sections">Abschnitte einzeln</option></select></div>
           <div><label>Werks-IP</label><input id="sFactory" class="mono"></div>
         </div>
-        <label class="switch"><input type="checkbox" id="sInternet"> Internet (Lizenz &amp; Update) – kamera-internet.sh --on nötig</label>
+        <label class="switch"><input type="checkbox" id="sInternet"> Internet (Firmware-Update) – kamera-internet.sh --on nötig</label>
         <div class="hint">Backup-Dateien in <span class="mono">backups/</span>: <span id="backups">–</span></div>
         <div style="margin-top:10px"><button class="btn btn-primary" onclick="saveSettings()">Speichern</button></div>
       </div>
@@ -133,7 +133,7 @@ function render() {
   document.getElementById('camInfo').innerHTML = [
     ['Aktuelle IP', s.ip], ['Passwort', s.password_known ? 'bekannt' : '–'], ['MAC', c.mac], ['Seriennummer', c.serial],
     ['Modell', c.model], ['Firmware', c.version_after && c.version_after !== c.version_before ? c.version_before + ' → ' + c.version_after : c.version_before],
-    ['Lizenz', c.license], ['Name', c.name]
+    ['Name', c.name]
   ].map(function(r) { return '<b>' + r[0] + '</b><span class="mono">' + esc(r[1] || '–') + '</span>'; }).join('');
   if (document.activeElement.id !== 'ctxIp') document.getElementById('ctxIp').value = s.ip || '';
 
