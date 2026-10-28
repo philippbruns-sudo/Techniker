@@ -62,6 +62,8 @@ MESSAGES = {
     'timeout': 'Timeout: version unchanged after {0} min',
     'rechecking': 'Checking for further updates ...',
     'too_many_rounds': 'Still a newer version after {0} updates - please check',
+    'not_applied': 'Camera reports "update finished" but is still on {0} - update to {1} was not applied',
+    'not_starting': 'Update to {0} does not start - camera stays on {1}',
 }
 
 UPDATE_FORMATS = ['json', 'json_string', 'form', 'query', 'json_raw', 'text', 'raw', 'none']
@@ -312,17 +314,13 @@ def available_version(value, current):
         return None
     m = re.search(r'\d+(?:\.\d+)+', str(value))
     version = m.group(0) if m else str(value).strip()
-    return version if is_newer(version, current) else None
+    return version if version_key(version) != version_key(current) else None
 
 
 def version_key(value):
     nums = re.findall(r'\d+', str(value or ''))
     return tuple(int(n) for n in nums) if nums else None
 
-
-def is_newer(target, current):
-    t, c = version_key(target), version_key(current)
-    return bool(t and c and t > c)
 
 
 def set_cam(ip, **fields):
@@ -390,13 +388,13 @@ def run_update(ip):
                 set_cam(ip, status='updating', detail=detail('starting_update', avail), progress=0)
                 raw = cameras[ip].get('update_raw') or avail
                 fmt = perform_update(ip, api, avail, raw)
-                version = wait_for_update(ip, api, chain[-1])
+                version = wait_for_update(ip, api, chain[-1], avail)
                 chain.append(version)
                 entry.update(version_after=version, message='Format: %s · %s' % (fmt, ' → '.join(chain)))
                 set_cam(ip, version=version, last_update=now())
                 set_cam(ip, status='updating', detail=detail('rechecking'), progress=None)
                 api, info, avail = recheck(ip)
-                if not avail:
+                if not avail or any(version_key(avail) == version_key(v) for v in chain):
                     break
             else:
                 raise CameraError('too_many_rounds', MAX_UPDATE_ROUNDS)
@@ -473,19 +471,25 @@ def perform_update(ip, api, version, raw):
     raise CameraError('all_formats_rejected', ', '.join(tried), code=400)
 
 
-def wait_for_update(ip, api, before):
-    deadline = time.time() + config['update_timeout_min'] * 60
+def wait_for_update(ip, api, before, target):
+    started = time.time()
+    deadline = started + config['update_timeout_min'] * 60
+    candidate, seen, active, stalled = None, 0, False, 0
     while time.time() < deadline:
         time.sleep(1 if DEMO else 4)
+        phase = None
         try:
             prog = api.call('GET', '/system/info/update_progress')
         except CameraError:
             set_cam(ip, detail=detail('rebooting'), progress=None)
+            candidate, seen, active = None, 0, True
             continue
         if isinstance(prog, dict):
             if prog.get('error'):
                 raise CameraError('update_error')
             phase = prog.get('phase') or 'running'
+            if phase in ('starting', 'downloading', 'installing'):
+                active = True
             pct = prog.get('percent')
             set_cam(ip, detail=detail('phase', phase), progress=pct if isinstance(pct, (int, float)) else None)
         try:
@@ -493,8 +497,21 @@ def wait_for_update(ip, api, before):
         except CameraError:
             continue
         version = info.get('version') if isinstance(info, dict) else None
-        if version and version != before:
+        if version and version_key(version) == version_key(target):
             return version
+        if version and version != before and not info.get('software_down'):
+            seen = seen + 1 if version == candidate else 1
+            candidate = version
+            if seen >= 4:
+                return version
+        else:
+            candidate, seen = None, 0
+        unchanged = version == before and not info.get('software_down')
+        stalled = stalled + 1 if unchanged and phase == 'finished' and active else 0
+        if stalled >= 15:
+            raise CameraError('not_applied', before, target)
+        if unchanged and not active and time.time() - started > (20 if DEMO else 180):
+            raise CameraError('not_starting', target, before)
     raise CameraError('timeout', config['update_timeout_min'])
 
 

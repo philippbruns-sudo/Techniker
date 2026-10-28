@@ -15,7 +15,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.1.4'
+VERSION = '0.1.5'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -32,7 +32,6 @@ DEFAULT_CONFIG = {
     'backup_mode': 'all_settings',
     'internet': True,
     'perform_update_body': 'json',
-    'allow_downgrade': False,
     'timeout_s': 10,
     'update_timeout_min': 30,
     'ip_change_timeout_s': 240,
@@ -235,10 +234,6 @@ def version_key(value):
     return tuple(int(n) for n in nums) if nums else None
 
 
-def is_newer(target, current):
-    t, c = version_key(target), version_key(current)
-    return bool(t and c and t > c)
-
 
 def version_of(value):
     if not value or str(value).strip().lower() in ('false', 'none', 'null', '0'):
@@ -355,14 +350,16 @@ class Job:
             self.set('firmware', detail='Suche nach Updates%s ...' % (' (Runde %d)' % round_no if round_no > 1 else ''), progress=None)
             current, target = self.check_for_update(api)
             first = first or current
-            downgrade_ok = config.get('allow_downgrade') and target and target != current and not history
-            if not target or (not is_newer(target, current) and not downgrade_ok):
+            installed = [first] + history
+            repeat = target and version_key(target) != version_key(current) and \
+                any(version_key(target) == version_key(v) for v in installed)
+            if not target or version_key(target) == version_key(current) or repeat:
                 self.cam(version_after=current)
-                note = ' (angeboten: %s – nicht neuer, ignoriert)' % target if target and target != current else ''
+                note = ' (angeboten: %s – war schon installiert, nicht erneut)' % target if repeat else ''
                 if not history:
                     self.set('firmware', status='skipped')
                     return 'Version %s ist aktuell%s' % (current, note)
-                return 'Version %s → %s (%d Update%s), danach kein neueres Update%s' % (
+                return 'Version %s → %s (%d Update%s), danach kein weiteres Update%s' % (
                     first, current, len(history), '' if len(history) == 1 else 's', note)
             self.target_version = target
             prefix = 'Runde %d: ' % round_no if round_no > 1 else ''
@@ -395,23 +392,28 @@ class Job:
         deadline = started + config['update_timeout_min'] * 60
         phases = {'starting': 'Startet', 'downloading': 'Lädt herunter', 'installing': 'Installiert', 'finished': 'Abgeschlossen'}
         candidate, seen = None, 0
+        active, stalled = False, 0
         while time.time() < deadline:
             self.sleep(4)
             elapsed = '%d:%02d min' % divmod(int(time.time() - started), 60)
+            phase = None
             try:
                 prog = api.call('GET', '/system/info/update_progress', quiet=True)
                 if isinstance(prog, dict):
                     if prog.get('error'):
                         raise StepError('Update auf %s fehlgeschlagen (update_progress meldet Fehler)' % target)
                     pct = prog.get('percent')
-                    self.set('firmware', detail='%s%s %s ... (%s)' % (prefix, phases.get(prog.get('phase'), prog.get('phase') or 'Läuft'), target, elapsed),
+                    phase = prog.get('phase')
+                    if phase in ('starting', 'downloading', 'installing'):
+                        active = True
+                    self.set('firmware', detail='%s%s %s ... (%s)' % (prefix, phases.get(phase, phase or 'Läuft'), target, elapsed),
                              progress=pct if isinstance(pct, (int, float)) else None)
                 info = api.call('GET', '/system/info', quiet=True)
             except StepError as e:
                 if e.code and 400 <= e.code < 500:
                     raise
                 self.set('firmware', detail='%sKamera startet neu ... (%s)' % (prefix, elapsed), progress=None)
-                candidate, seen = None, 0
+                candidate, seen, active = None, 0, True
                 continue
             version = info.get('version') if isinstance(info, dict) else None
             if version and version_of(version) == target:
@@ -425,6 +427,12 @@ class Job:
                     return version
             else:
                 candidate, seen = None, 0
+            unchanged = version == before and not info.get('software_down')
+            stalled = stalled + 1 if unchanged and phase == 'finished' and active else 0
+            if stalled >= 15:
+                raise StepError('Kamera meldet „Update abgeschlossen“, Version ist aber weiterhin %s – Update auf %s wurde nicht übernommen' % (before, target))
+            if unchanged and not active and time.time() - started > 180:
+                raise StepError('Update auf %s startet nicht – Kamera bleibt auf %s (Internet über den Pi aktiv?)' % (target, before))
         raise StepError('Zeitüberschreitung: nach %d min nicht auf %s (zuletzt: %s)' % (config['update_timeout_min'], target, candidate or before))
 
     def do_password(self):
@@ -774,8 +782,6 @@ class Handler(BaseHTTPRequestHandler):
                     config[key] = max(1, int(data[key]))
             if 'internet' in data:
                 config['internet'] = bool(data['internet'])
-            if 'allow_downgrade' in data:
-                config['allow_downgrade'] = bool(data['allow_downgrade'])
             if data.get('new_password'):
                 config['new_password'] = data['new_password']
             if data.get('profiles'):

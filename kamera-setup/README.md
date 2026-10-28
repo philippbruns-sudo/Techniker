@@ -79,12 +79,16 @@ entspricht der MAC ohne Doppelpunkte.
 |---|---|---|---|
 | 1 | Kamera auf `192.168.0.240` finden | TCP Port 80 | ✅ bestätigt |
 | 2 | MAC aus ARP, Passwort = letzte 4 Zeichen groß, anmelden | `GET /system/info` | ✅ bestätigt |
-| 3 | Firmware-Update (wiederholt, bis keine neuere Version mehr kommt) | `check_update`, `perform_update` `{"version": …}`, `update_progress` | ✅ Format bestätigt (Update-Tool) |
+| 3 | Firmware-Update: **jede von ARVOO angebotene Version wird installiert** (auch eine ältere), danach erneut prüfen, bis nichts mehr angeboten wird | `check_update`, `perform_update` `{"version": …}`, `update_progress` | ✅ Format bestätigt (Update-Tool) |
 | 4 | Neues Passwort setzen, alt/neu prüfen | `POST /system/actions/set_password` (text/plain) | ⏳ an Kamera testen |
 | 5 | Name setzen und zurücklesen | `POST /system/settings/` `{"name": …}` | ⏳ an Kamera testen |
 | 6 | Backup einspielen (IP aus Profil) | `POST /system/actions/all_settings` oder Abschnitte einzeln | ⏳ an Kamera testen |
 | 7 | Auf neuer IP warten, alle Abschnitte mit Backup vergleichen | `GET` je Abschnitt | ⏳ an Kamera testen |
 | 8 | Abschlussprüfung: Version, Name | `GET /system/info`, `/system/settings/` | ⏳ an Kamera testen |
+
+Eine Version, die im selben Durchlauf schon installiert war, wird nicht erneut installiert (kein Hin und Her).
+Meldet die Kamera „Update abgeschlossen“, bleibt aber auf der alten Version, bricht der Schritt nach
+etwa einer Minute mit einer klaren Meldung ab.
 
 Das Update läuft **vor** dem Backup, solange die Kamera noch im Werksnetz hängt
 (dort kann der Pi Gateway spielen, siehe `kamera-internet.sh`).
