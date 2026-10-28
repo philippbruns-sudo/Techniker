@@ -46,7 +46,8 @@ sudo bash ~/Techniker/kamera-setup/pi/kamera-internet.sh --off
 
 ```bash
 cd ~/Techniker && git pull
-sudo python3 ~/Techniker/kamera-setup/server.py --manual
+sudo python3 ~/Techniker/kamera-setup/server.py            # Normalbetrieb: Kamera wird automatisch erkannt
+sudo python3 ~/Techniker/kamera-setup/server.py --manual   # Testbetrieb: nur von Hand starten
 ```
 
 | Adresse | Zweck |
@@ -59,8 +60,28 @@ Die **Kamera-Oberfläche** der gerade angeschlossenen Kamera ist über den Pi er
 Kamera weiter und sucht sie selbst (aktuelle IP, Werks-IP, `.21`, `.22` – auch nach einem Neustart des Servers); anmelden wie direkt an der Kamera. `--gui-port 0` schaltet das ab.
 
 `--manual` schaltet die automatische Erkennung aus (zum Testen). Ohne `--manual` startet die
-Einrichtung von selbst, sobald eine Kamera auf der Werks-IP antwortet. `sudo` wird gebraucht,
-um vor dem Anmelden den ARP-Cache zu leeren (MAC der richtigen Kamera).
+Einrichtung **5 Sekunden** nach dem Erkennen einer Kamera von selbst (Countdown auf dem Bildschirm,
+„Abbrechen“ möglich). `sudo` wird gebraucht, um Pakete auf eth0 mitzulesen (Kameras mit unbekannter IP),
+Routen zu setzen und den ARP-Cache zu leeren.
+
+### Kameras aus dem Feld
+
+Erkannt wird jede Kamera am Kabel, egal welche IP sie hat:
+
+1. Der Pi prüft die Werks-IP `192.168.0.240` und die Profil-IPs `.21`/`.22`.
+2. Zusätzlich liest er auf eth0 mit, welche IP die Kamera verwendet (ARP- und IP-Pakete, z. B. beim Booten).
+   Für eine fremde IP legt er vorübergehend eine Host-Route und eine eigene Adresse im selben Netz (`x.x.x.250`)
+   auf eth0 an; beides wird entfernt, sobald keine Kamera mehr steckt. Gateway und eigene Adressen des Pi
+   werden nie umgeleitet.
+3. Nach der Anmeldung (MAC-Passwort oder neues Passwort) wird die Kamera auf die **Werks-IP**
+   `192.168.0.240` (Gateway/DNS `192.168.0.1`) umgestellt. Danach läuft alles wie bei einer neuen Kamera,
+   inklusive Firmware-Update über den Pi.
+
+Nach „Nächste Kamera“ wird die gerade eingerichtete Kamera nicht erneut gestartet, solange sie noch steckt.
+„Einrichtung manuell starten“ geht trotzdem.
+
+Grenzen: Kameras mit DHCP ohne Adresse und Kameras mit einem anderen Passwort als MAC-Passwort oder
+neuem Passwort werden nicht automatisch eingerichtet.
 
 **Backup:** im Testmodus unter Einstellungen **„Backup hochladen“** – wird als
 `backups/backup.json` gespeichert und vorher geprüft (gültiges JSON mit Netzwerk-Einstellungen).
@@ -81,14 +102,14 @@ entspricht der MAC ohne Doppelpunkte.
 
 | # | Schritt | Kamera-API | Stand |
 |---|---|---|---|
-| 1 | Kamera auf `192.168.0.240` finden | TCP Port 80 | ✅ bestätigt |
-| 2 | MAC aus ARP, Passwort = letzte 4 Zeichen groß, anmelden | `GET /system/info` | ✅ bestätigt |
+| 1 | Kamera finden (Werks-IP, `.21`/`.22` oder mitgelesene IP), 5 s Countdown | TCP Port 80 | ✅ bestätigt (Werks-IP) |
+| 2 | MAC aus ARP, Passwort = letzte 4 Zeichen groß (sonst neues Passwort), anmelden; Kamera aus dem Feld ins Werksnetz holen | `GET /system/info`, `POST /network/settings` | ✅ bestätigt (Werks-IP) |
 | 3 | Firmware-Update: **einmal** nach Update fragen, wenn eins angeboten wird, installieren – fertig. Versionsnummern werden ignoriert | `check_update`, `perform_update` `{"version": …}`, `update_progress` | ✅ Format bestätigt (Update-Tool) |
 | 4 | Neues Passwort setzen, alt/neu prüfen | `POST /system/actions/set_password` (text/plain) | ✅ bestätigt |
 | 5 | Name setzen und zurücklesen | `POST /system/settings/` `{"name": …}` | ✅ bestätigt |
-| 6 | Backup einspielen (IP aus Profil) | `POST /system/actions/all_settings`; lehnt die Kamera ab (z. B. HTTP 500), automatisch Abschnitte einzeln (ANPR, Basis, Netzwerk zuletzt) | ⏳ an Kamera testen |
-| 7 | Auf neuer IP warten, alle Abschnitte mit Backup vergleichen | `GET` je Abschnitt | ⏳ an Kamera testen |
-| 8 | Abschlussprüfung: Version, Name | `GET /system/info`, `/system/settings/` | ⏳ an Kamera testen |
+| 6 | Backup einspielen (IP aus Profil) | `POST /system/actions/all_settings`; lehnt die Kamera ab (z. B. HTTP 500), automatisch Abschnitte einzeln (ANPR, Basis, Netzwerk zuletzt) | ✅ bestätigt |
+| 7 | Auf neuer IP warten, alle Abschnitte mit Backup vergleichen | `GET` je Abschnitt | ✅ bestätigt |
+| 8 | Abschlussprüfung: Version, Name | `GET /system/info`, `/system/settings/` | ✅ bestätigt |
 
 Bietet die Kamera nichts an, ist der Schritt fertig (übersprungen). Meldet die Kamera beim Update
 einen Fehler, gilt das als „von Kamera abgelehnt“ – kein Abbruch, es geht normal weiter. Danach wird

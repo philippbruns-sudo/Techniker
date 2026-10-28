@@ -15,7 +15,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.3.0'
+VERSION = '0.4.0'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -27,6 +27,8 @@ DEFAULT_CONFIG = {
     'api_prefix': '/api/v2',
     'user': 'user',
     'new_password': '',
+    'factory_gateway': '192.168.0.1',
+    'autostart_delay_s': 5,
     'interface': 'eth0',
     'backup_dir': 'backups',
     'backup_mode': 'all_settings',
@@ -43,7 +45,7 @@ DEFAULT_CONFIG = {
 }
 
 STEPS = [
-    ('detect', 'Kamera suchen ({factory_ip})'),
+    ('detect', 'Kamera suchen'),
     ('login', 'MAC auslesen & anmelden'),
     ('firmware', 'Firmware-Update'),
     ('password', 'Passwort ändern'),
@@ -252,6 +254,104 @@ def read_mac(ip):
 
 
 
+def run_ip(*args):
+    try:
+        return subprocess.run(['ip'] + list(args), capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def protected_ips():
+    ips = set()
+    for args in (('-4', 'route', 'show', 'default'), ('-4', '-o', 'addr', 'show')):
+        res = run_ip(*args)
+        if res:
+            ips.update(re.findall(r'(?:via|inet) (\d+\.\d+\.\d+\.\d+)', res.stdout))
+    return ips
+
+
+def reach(ip):
+    target = bare_ip(ip)
+    if target.startswith('127.') or route_device(target) == config['interface']:
+        return True
+    if target in protected_ips():
+        return False
+    parts = target.split('.')
+    src = '.'.join(parts[:3] + ['251' if parts[3] == '250' else '250'])
+    res = run_ip('addr', 'add', src + '/32', 'dev', config['interface'])
+    added_addr = bool(res and res.returncode == 0)
+    run_ip('route', 'replace', target + '/32', 'dev', config['interface'], 'src', src)
+    with lock:
+        temp_routes.append((target, src if added_addr else None))
+    return route_device(target) == config['interface']
+
+
+def drop_temp_routes():
+    with lock:
+        routes = list(temp_routes)
+        del temp_routes[:]
+    for target, src in routes:
+        run_ip('route', 'del', target + '/32', 'dev', config['interface'])
+        if src:
+            run_ip('addr', 'del', src + '/32', 'dev', config['interface'])
+
+
+class Sniffer:
+    def __init__(self):
+        self.seen = {}
+
+    def start(self, iface):
+        try:
+            sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3))
+            sock.bind((iface, 0))
+        except (OSError, AttributeError) as e:
+            print('Hinweis: Kameras mit unbekannter IP werden nicht erkannt (%s) – mit sudo starten.' % e)
+            return
+        threading.Thread(target=self.loop, args=(sock,), daemon=True).start()
+
+    def loop(self, sock):
+        while True:
+            try:
+                frame, addr = sock.recvfrom(2048)
+            except OSError:
+                time.sleep(1)
+                continue
+            if addr[2] == socket.PACKET_OUTGOING or len(frame) < 34:
+                continue
+            etype = frame[12:14]
+            if etype == b'\x08\x06' and len(frame) >= 42:
+                raw = frame[28:32] if frame[28:32] != b'\0\0\0\0' else frame[38:42]
+            elif etype == b'\x08\x00':
+                raw = frame[26:30]
+            else:
+                continue
+            if raw[0] in (0, 127) or raw[0] >= 224:
+                continue
+            ip = '.'.join(str(b) for b in raw)
+            with lock:
+                self.seen[ip] = time.time()
+
+    def recent(self, seconds=120):
+        with lock:
+            return [ip for ip, t in sorted(self.seen.items(), key=lambda x: -x[1]) if time.time() - t < seconds]
+
+
+def candidate_ips():
+    ips = [config['factory_ip']] + [p['ip'] for p in config['profiles']]
+    for ip in sniffer.recent():
+        if ip not in [bare_ip(i) for i in ips]:
+            ips.append(ip)
+    return ips
+
+
+def find_camera():
+    for ip in candidate_ips():
+        if not reach(ip) or not port_open(ip, 1):
+            continue
+        return ip, (read_mac(ip) or '').lower()
+    return None
+
+
 def load_backup():
     p = profile()
     path = os.path.join(BASE_DIR, config['backup_dir'], p['backup'])
@@ -290,6 +390,7 @@ class Job:
         p = profile()
         self.state = 'waiting'
         self.ip = config['factory_ip']
+        self.found = None
         self.password = None
         self.camera = None
         self.error = None
@@ -328,13 +429,23 @@ class Job:
             self.camera = dict(self.camera or {}, **fields)
 
     def do_detect(self):
-        ip = config['factory_ip']
-        check_route(ip)
-        self.set('detect', detail='Warte auf Antwort von %s ...' % ip)
-        if not port_open(ip):
-            raise StepError('Keine Kamera auf %s (Port %s) – Kabel/PoE prüfen, Kamera bootet ca. 1–2 min' % (ip, config['port']))
-        self.ip = ip
-        return 'Kamera antwortet'
+        auto = bool(self.found)
+        self.set('detect', detail='Suche Kamera ...')
+        found = self.found or find_camera()
+        self.found = None
+        if not found:
+            raise StepError('Keine Kamera gefunden (%s und andere IPs) – Kabel/PoE prüfen, Kamera bootet ca. 1–2 min'
+                            % bare_ip(config['factory_ip']))
+        self.ip = found[0]
+        self.set('detect', label='Kamera gefunden (%s)' % bare_ip(self.ip))
+        if found[1]:
+            self.cam(mac=found[1].upper())
+        for left in range(int(config['autostart_delay_s']) if auto else 0, 0, -1):
+            self.set('detect', detail='Einrichtung startet in %d s ...' % left)
+            self.sleep(1)
+        if bare_ip(self.ip) == bare_ip(config['factory_ip']):
+            return 'Kamera im Werkszustand'
+        return 'Kamera auf %s – wird ins Werksnetz geholt' % bare_ip(self.ip)
 
     def do_login(self):
         flush_arp(self.ip)
@@ -351,7 +462,36 @@ class Job:
         self.cam(serial=serial, model=info.get('model'), version_before=info.get('version'), ip=bare_ip(self.ip))
         note = '' if serial.upper() == mac.replace(':', '').upper() else ' (Seriennummer ≠ MAC)'
         how = 'neuem Passwort (schon gesetzt)' if self.password == config.get('new_password') else '…%s' % self.password
-        return 'Angemeldet mit %s · %s %s%s' % (how, info.get('model') or '', info.get('version') or '', note)
+        moved = self.move_to_factory_net()
+        return 'Angemeldet mit %s · %s %s%s%s' % (how, info.get('model') or '', info.get('version') or '', note, moved)
+
+    def move_to_factory_net(self):
+        factory = config['factory_ip']
+        old = bare_ip(self.ip)
+        if old == bare_ip(factory):
+            return ''
+        api = self.api()
+        net = api.call('GET', '/network/settings')
+        lan = net.get('lan') if isinstance(net, dict) else None
+        if not isinstance(lan, dict):
+            raise StepError('Netzwerk-Einstellungen der Kamera nicht lesbar')
+        lan.update(address=bare_ip(factory), netmask='255.255.255.0', gateway=config['factory_gateway'],
+                   dns_nameservers=[config['factory_gateway']], dhcp_enabled=False, static_ip_enabled=True)
+        self.set('login', detail='Stelle %s auf Werks-IP %s um ...' % (old, bare_ip(factory)))
+        try:
+            api.call('POST', '/network/settings', net, timeout=30)
+        except StepError as e:
+            if 'nicht erreichbar' not in str(e):
+                raise
+        self.ip = factory
+        deadline = time.time() + config['ip_change_timeout_s']
+        while time.time() < deadline:
+            self.set('login', detail='Warte auf Kamera unter %s ...' % bare_ip(factory))
+            flush_arp(factory)
+            if port_open(factory):
+                return ' · von %s ins Werksnetz geholt' % old
+            self.sleep(3)
+        raise StepError('Kamera nach Umstellung nicht unter %s erreichbar (vorher %s)' % (bare_ip(factory), old))
 
     def do_firmware(self):
         if not config['internet']:
@@ -634,6 +774,9 @@ gui_port = 0
 gui_last = None
 worker = None
 auto_detect = True
+ignore_mac = None
+temp_routes = []
+sniffer = Sniffer()
 
 
 def start_worker(index=0):
@@ -646,12 +789,21 @@ def start_worker(index=0):
 
 
 def detector():
+    global ignore_mac
     while True:
         time.sleep(2)
         if not auto_detect or job.state != 'waiting' or (worker and worker.is_alive()):
             continue
         try:
-            if route_device(config['factory_ip']) == config['interface'] and port_open(config['factory_ip'], 1):
+            found = find_camera()
+            if not found:
+                ignore_mac = None
+                drop_temp_routes()
+                continue
+            if ignore_mac and found[1] == ignore_mac:
+                continue
+            if job.state == 'waiting' and not (worker and worker.is_alive()):
+                job.found = found
                 start_worker(0)
         except Exception:
             pass
@@ -719,7 +871,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({'error': 'nicht gefunden'}, 404)
 
     def do_POST(self):
-        global auto_detect, worker
+        global auto_detect, worker, ignore_mac
         path = urlparse(self.path).path
         try:
             length = int(self.headers.get('Content-Length') or 0)
@@ -742,6 +894,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({'ok': True})
         if path == '/api/next':
             if not busy:
+                ignore_mac = ((job.camera or {}).get('mac') or '').lower() or None
                 job.reset()
             return self.send_json({'ok': True})
         if path == '/api/profile':
@@ -889,6 +1042,7 @@ def main():
     give_back(os.path.join(BASE_DIR, config['backup_dir']))
     job = Job()
     auto_detect = not args.manual
+    sniffer.start(config['interface'])
     threading.Thread(target=detector, daemon=True).start()
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print('Kamera-Setup %s läuft: http://<pi-ip>:%d  ·  Testmodus: http://<pi-ip>:%d/test  (Strg+C beendet)'
