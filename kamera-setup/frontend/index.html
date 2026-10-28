@@ -445,7 +445,7 @@
           <p>Kamera per LAN anschließen.<br>Die Einrichtung startet automatisch 5 Sekunden, nachdem sie erkannt wurde.</p>
           <div class="search-hint">
             <div class="spinner light small"></div>
-            <span>Suche Kamera auf <span id="defaultIp">192.168.0.240</span> und anderen IPs ...</span>
+            <span>Suche Kamera ...</span>
           </div>
         </div>
         <div class="profile-select" id="profileSelect" style="display:none;">
@@ -671,7 +671,6 @@ function render(s) {
 
   document.getElementById('statOk').innerText = s.stats ? s.stats.ok : 0;
   document.getElementById('statErr').innerText = s.stats ? s.stats.error : 0;
-  if (s.config && s.config.default_ip) document.getElementById('defaultIp').innerText = s.config.default_ip;
   renderProfiles(s.config);
 
   var steps = s.steps || [];
