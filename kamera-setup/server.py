@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.4.4'
+VERSION = '0.4.5'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -361,17 +361,23 @@ class Sniffer:
             return [ip for ip, t in sorted(self.seen.items(), key=lambda x: -x[1]) if time.time() - t < seconds]
 
 
-def candidate_ips():
-    ips = [config['factory_ip']] + [p['ip'] for p in config['profiles']]
-    for ip in sniffer.recent():
-        if ip not in [bare_ip(i) for i in ips]:
-            ips.append(ip)
-    return ips
+def link_up():
+    try:
+        with open('/sys/class/net/%s/carrier' % config['interface']) as f:
+            return f.read().strip() == '1'
+    except OSError:
+        return True
 
 
 def find_camera():
-    for ip in candidate_ips():
-        if not reach(ip) or not port_open(ip, 1):
+    if not link_up():
+        return None
+    fixed = [config['factory_ip']] + [p['ip'] for p in config['profiles']]
+    for ip in fixed:
+        if (bare_ip(ip).startswith('127.') or route_device(ip) == config['interface']) and port_open(ip, 1):
+            return ip, (read_mac(ip) or '').lower()
+    for ip in sniffer.recent():
+        if ip in [bare_ip(i) for i in fixed] or not reach(ip) or not port_open(ip, 1):
             continue
         return ip, (read_mac(ip) or '').lower()
     return None
