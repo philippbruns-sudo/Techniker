@@ -15,7 +15,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.2.0'
+VERSION = '0.3.0'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -630,6 +630,7 @@ def stats_today():
 
 
 job = None
+gui_port = 0
 worker = None
 auto_detect = True
 
@@ -675,6 +676,8 @@ def test_state():
     s['backups'] = sorted(os.listdir(os.path.join(BASE_DIR, config['backup_dir']))) \
         if os.path.isdir(os.path.join(BASE_DIR, config['backup_dir'])) else []
     s['auto_detect'] = auto_detect
+    s['gui_port'] = gui_port
+    s['camera_ip'] = bare_ip(job.ip) if job.ip else bare_ip(config['factory_ip'])
     s['running'] = bool(worker and worker.is_alive())
     s['routes'] = {ip: route_device(ip) for ip in [config['factory_ip']] + [bare_ip(p['ip']) for p in config['profiles']]}
     return s
@@ -813,11 +816,53 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({'error': 'nicht gefunden'}, 404)
 
 
+def pipe(src, dst):
+    try:
+        while True:
+            chunk = src.recv(65536)
+            if not chunk:
+                break
+            dst.sendall(chunk)
+    except OSError:
+        pass
+    finally:
+        for sock in (src, dst):
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+
+def gui_forward(client):
+    host, port = host_of(job.ip if job and job.ip else config['factory_ip']).rsplit(':', 1)
+    try:
+        camera = socket.create_connection((host, int(port)), timeout=5)
+    except OSError:
+        client.close()
+        return
+    camera.settimeout(None)
+    threading.Thread(target=pipe, args=(client, camera), daemon=True).start()
+    pipe(camera, client)
+    client.close()
+    camera.close()
+
+
+def gui_proxy(host, port):
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind((host, port))
+    listener.listen(32)
+    while True:
+        client, _ = listener.accept()
+        threading.Thread(target=gui_forward, args=(client,), daemon=True).start()
+
+
 def main():
-    global config, job, auto_detect
+    global config, job, auto_detect, gui_port
     parser = argparse.ArgumentParser(description='Kamera-Setup-Station für ARVOO Ruby')
     parser.add_argument('--host', default='0.0.0.0')
     parser.add_argument('--port', type=int, default=8080)
+    parser.add_argument('--gui-port', type=int, default=8081, help='Weiterleitung zur Kamera-Oberfläche (0 = aus)')
     parser.add_argument('--manual', action='store_true', help='keine automatische Erkennung (Testbetrieb)')
     args = parser.parse_args()
     config = load_config()
@@ -831,6 +876,10 @@ def main():
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print('Kamera-Setup %s läuft: http://<pi-ip>:%d  ·  Testmodus: http://<pi-ip>:%d/test  (Strg+C beendet)'
           % (VERSION, args.port, args.port))
+    gui_port = args.gui_port
+    if args.gui_port:
+        threading.Thread(target=gui_proxy, args=(args.host, args.gui_port), daemon=True).start()
+        print('Kamera-Oberfläche: http://<pi-ip>:%d (aktuelle Kamera)' % args.gui_port)
     if os.geteuid() != 0:
         print('Hinweis: ohne sudo kann der ARP-Cache nicht geleert werden.')
     try:

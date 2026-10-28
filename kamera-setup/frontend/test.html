@@ -18,7 +18,7 @@
   input, select { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 2px solid #f3e9e2; border-radius: 6px; font-size: 14px; font-family: inherit; background: white; }
   input:focus, select:focus { border-color: #ff6600; outline: none; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .btn { border: none; border-radius: 6px; padding: 8px 14px; font-weight: 600; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .btn { border: none; border-radius: 6px; padding: 8px 14px; font-weight: 600; font-size: 13px; cursor: pointer; font-family: inherit; text-decoration: none; display: inline-block; }
   .btn-primary { background: #ff6600; color: white; }
   .btn-navy { background: #002d56; color: white; }
   .btn-sec { background: white; color: #002d56; border: 2px solid #cbd5e1; }
@@ -61,6 +61,7 @@
       <div class="card">
         <h2>Kamera</h2>
         <div class="kv" id="camInfo"></div>
+        <div style="margin-top:8px"><a id="guiLink" class="btn btn-sec" target="_blank" rel="noopener">🖥 Kamera-Oberfläche öffnen</a> <span class="hint" id="guiHint"></span></div>
         <label>Ziel-IP für den nächsten Schritt</label>
         <input id="ctxIp" class="mono">
         <label>Passwort (falls bekannt)</label>
@@ -135,6 +136,9 @@ function refresh() {
 function render() {
   var s = state;
   document.getElementById('ver').innerText = 'v' + s.version;
+  document.getElementById('guiLink').style.display = s.gui_port ? '' : 'none';
+  document.getElementById('guiLink').href = 'http://' + location.hostname + ':' + s.gui_port + '/';
+  document.getElementById('guiHint').innerText = 'über den Pi zu ' + (s.camera_ip || '–');
   var c = s.camera || {};
   document.getElementById('camInfo').innerHTML = [
     ['Aktuelle IP', s.ip], ['Passwort', s.password_known ? 'bekannt' : '–'], ['MAC', c.mac], ['Seriennummer', c.serial],

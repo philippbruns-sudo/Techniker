@@ -54,6 +54,10 @@ sudo python3 ~/Techniker/kamera-setup/server.py --manual
 | `http://<pi-ip>:8080/test` | **Testmodus** – jeden Schritt einzeln ausführen, alle Anfragen an die Kamera mit Antwort sehen |
 | `http://<pi-ip>:8080/` | Normale Oberfläche (Tablet) |
 
+Die **Kamera-Oberfläche** der gerade angeschlossenen Kamera ist über den Pi erreichbar: `http://<pi-ip>:8081`
+(Link „🖥 Kamera-Oberfläche öffnen“ auf der Testseite). Der Pi leitet die Verbindung einfach an die aktuelle
+Kamera-IP weiter (Werks-IP oder nach dem Backup `.21`/`.22`); anmelden wie direkt an der Kamera. `--gui-port 0` schaltet das ab.
+
 `--manual` schaltet die automatische Erkennung aus (zum Testen). Ohne `--manual` startet die
 Einrichtung von selbst, sobald eine Kamera auf der Werks-IP antwortet. `sudo` wird gebraucht,
 um vor dem Anmelden den ARP-Cache zu leeren (MAC der richtigen Kamera).
