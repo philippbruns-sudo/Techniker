@@ -50,6 +50,19 @@ sudo python3 ~/Techniker/kamera-setup/server.py            # Normalbetrieb: Kame
 sudo python3 ~/Techniker/kamera-setup/server.py --manual   # Testbetrieb: nur von Hand starten
 ```
 
+**Automatisch beim Hochfahren starten** (einmalig einrichten, läuft dann im Normalbetrieb ohne `--manual`):
+
+```bash
+sudo bash ~/Techniker/kamera-setup/pi/autostart-einrichten.sh            # einrichten und starten
+sudo bash ~/Techniker/kamera-setup/pi/autostart-einrichten.sh --status   # läuft er?
+sudo bash ~/Techniker/kamera-setup/pi/autostart-einrichten.sh --remove   # Autostart entfernen
+sudo systemctl restart kamera-setup      # nach git pull
+journalctl -u kamera-setup -f            # Meldungen live ansehen
+```
+
+Stürzt der Server ab, startet er nach 5 Sekunden neu. Solange der Dienst läuft, kann `server.py`
+nicht zusätzlich von Hand gestartet werden (Port belegt) – zum Testen vorher `sudo systemctl stop kamera-setup`.
+
 | Adresse | Zweck |
 |---|---|
 | `http://<pi-ip>:8080/test` | **Testmodus** – jeden Schritt einzeln ausführen, alle Anfragen an die Kamera mit Antwort sehen |
