@@ -117,12 +117,34 @@ def bare_ip(ip):
 
 
 class Camera:
-    def __init__(self, ip, password, http_log):
+    def __init__(self, ip, password, http_log, job=None):
         self.ip = ip
         self.password = password
         self.http_log = http_log
+        self.job = job
 
-    def call(self, method, path, body=None, content_type=None, timeout=None, quiet=False):
+    def call(self, *args, **kwargs):
+        try:
+            return self.request(*args, **kwargs)
+        except StepError as e:
+            if e.code != 401 or not self.job:
+                raise
+            for pw in self.job.password_candidates():
+                if pw == self.password:
+                    continue
+                self.password = pw
+                try:
+                    result = self.request(*args, **kwargs)
+                except StepError as retry:
+                    if retry.code == 401:
+                        continue
+                    self.job.password = pw
+                    raise
+                self.job.password = pw
+                return result
+            raise
+
+    def request(self, method, path, body=None, content_type=None, timeout=None, quiet=False):
         url = 'http://%s%s%s' % (host_of(self.ip), config['api_prefix'], path)
         headers = {'Authorization': 'Basic ' + base64.b64encode(('%s:%s' % (config['user'], self.password)).encode()).decode()}
         data = None
@@ -285,7 +307,11 @@ class Job:
             self.step(key).update(fields)
 
     def api(self):
-        return Camera(self.ip, self.password, self.http_log)
+        return Camera(self.ip, self.password, self.http_log, self)
+
+    def password_candidates(self):
+        mac = (self.camera or {}).get('mac') or ''
+        return [pw for pw in (mac.replace(':', '')[-4:].upper(), config.get('new_password')) if pw]
 
     def check_cancel(self):
         if self.cancel_flag:
@@ -324,7 +350,8 @@ class Job:
         serial = info.get('serial') or ''
         self.cam(serial=serial, model=info.get('model'), version_before=info.get('version'), ip=bare_ip(self.ip))
         note = '' if serial.upper() == mac.replace(':', '').upper() else ' (Seriennummer ≠ MAC)'
-        return 'Angemeldet mit …%s · %s %s%s' % (self.password, info.get('model') or '', info.get('version') or '', note)
+        how = 'neuem Passwort (schon gesetzt)' if self.password == config.get('new_password') else '…%s' % self.password
+        return 'Angemeldet mit %s · %s %s%s' % (how, info.get('model') or '', info.get('version') or '', note)
 
     def do_firmware(self):
         if not config['internet']:
