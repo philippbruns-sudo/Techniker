@@ -631,6 +631,7 @@ def stats_today():
 
 job = None
 gui_port = 0
+gui_last = None
 worker = None
 auto_detect = True
 
@@ -677,7 +678,7 @@ def test_state():
         if os.path.isdir(os.path.join(BASE_DIR, config['backup_dir'])) else []
     s['auto_detect'] = auto_detect
     s['gui_port'] = gui_port
-    s['camera_ip'] = bare_ip(job.ip) if job.ip else bare_ip(config['factory_ip'])
+    s['camera_ip'] = bare_ip(gui_last or job.ip or config['factory_ip'])
     s['running'] = bool(worker and worker.is_alive())
     s['routes'] = {ip: route_device(ip) for ip in [config['factory_ip']] + [bare_ip(p['ip']) for p in config['profiles']]}
     return s
@@ -833,11 +834,27 @@ def pipe(src, dst):
                 pass
 
 
+def gui_targets():
+    ips = [gui_last, job.ip if job else None, config['factory_ip']] + [p['ip'] for p in config['profiles']]
+    seen = []
+    for ip in ips:
+        if ip and host_of(ip) not in seen:
+            seen.append(host_of(ip))
+    return seen
+
+
 def gui_forward(client):
-    host, port = host_of(job.ip if job and job.ip else config['factory_ip']).rsplit(':', 1)
-    try:
-        camera = socket.create_connection((host, int(port)), timeout=5)
-    except OSError:
+    global gui_last
+    camera = None
+    for target in gui_targets():
+        host, port = target.rsplit(':', 1)
+        try:
+            camera = socket.create_connection((host, int(port)), timeout=2)
+            gui_last = target
+            break
+        except OSError:
+            continue
+    if not camera:
         client.close()
         return
     camera.settimeout(None)

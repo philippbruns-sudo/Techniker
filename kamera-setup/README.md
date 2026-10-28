@@ -56,7 +56,7 @@ sudo python3 ~/Techniker/kamera-setup/server.py --manual
 
 Die **Kamera-Oberfläche** der gerade angeschlossenen Kamera ist über den Pi erreichbar: `http://<pi-ip>:8081`
 (Link „🖥 Kamera-Oberfläche öffnen“ auf der Testseite). Der Pi leitet die Verbindung einfach an die aktuelle
-Kamera-IP weiter (Werks-IP oder nach dem Backup `.21`/`.22`); anmelden wie direkt an der Kamera. `--gui-port 0` schaltet das ab.
+Kamera weiter und sucht sie selbst (aktuelle IP, Werks-IP, `.21`, `.22` – auch nach einem Neustart des Servers); anmelden wie direkt an der Kamera. `--gui-port 0` schaltet das ab.
 
 `--manual` schaltet die automatische Erkennung aus (zum Testen). Ohne `--manual` startet die
 Einrichtung von selbst, sobald eine Kamera auf der Werks-IP antwortet. `sudo` wird gebraucht,
