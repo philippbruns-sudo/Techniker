@@ -67,7 +67,7 @@ MESSAGES = {
 }
 
 UPDATE_FORMATS = ['json', 'json_string', 'form', 'query', 'json_raw', 'text', 'raw', 'none']
-UPDATE_ROUNDS = 2
+UPDATE_ROUNDS = 1
 PHASES = ('starting', 'downloading', 'installing', 'finished')
 
 DEMO = False

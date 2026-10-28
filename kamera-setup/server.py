@@ -53,7 +53,7 @@ STEPS = [
     ('verify', 'Abschlussprüfung'),
 ]
 
-UPDATE_ROUNDS = 2
+UPDATE_ROUNDS = 1
 
 LOG_FIELDS = ['time', 'profile', 'name', 'mac', 'serial', 'ip', 'version_before', 'version_after',
               'result', 'message']
@@ -333,19 +333,19 @@ class Job:
         api = self.api()
         results = []
         for round_no in range(1, UPDATE_ROUNDS + 1):
-            prefix = 'Runde %d: ' % round_no
+            prefix = 'Runde %d: ' % round_no if UPDATE_ROUNDS > 1 else ''
             self.set('firmware', detail=prefix + 'Suche nach Update ...', progress=None)
             offered = self.check_for_update(api)
             if not offered:
-                results.append('Runde %d: kein Update' % round_no)
+                results.append(prefix + 'kein Update')
                 break
             self.set('firmware', detail='%sUpdate %s wird installiert ...' % (prefix, offered), progress=0)
             body = {'version': offered} if config['perform_update_body'] == 'json' else offered
             api.call('POST', '/system/actions/perform_update', body)
             if not self.wait_update_done(api, prefix + offered):
-                results.append('Runde %d: %s von Kamera abgelehnt (Fehler: %s)' % (round_no, offered, getattr(self, 'update_error', '?')))
+                results.append('%s%s von Kamera abgelehnt (Fehler: %s)' % (prefix, offered, getattr(self, 'update_error', '?')))
                 break
-            results.append('Runde %d: %s installiert' % (round_no, offered))
+            results.append('%s%s installiert' % (prefix, offered))
         info = api.call('GET', '/system/info')
         self.cam(version_after=info.get('version'))
         if all('kein Update' in r for r in results):

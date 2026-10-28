@@ -66,10 +66,9 @@ button in the top right corner. The choice is remembered in the browser.
 | Track progress | `GET /system/info/update_progress` |
 | Wait for the reboot, confirm the new version | `GET /system/info` |
 
-The tool runs **two rounds**: ask for an update, and if one is offered, install it.
-Version numbers are ignored – whatever ARVOO offers is installed. After the second round
-the tool stops checking. If the camera reports an error for an offered update (e.g. an older
-version), it is noted as “rejected by camera” and the update still counts as successful.
+The tool asks **once** for an update, and if one is offered, installs it – done.
+Version numbers are ignored – whatever ARVOO offers is installed. If the camera reports an
+error for the update, it is noted as “rejected by camera” and the update still counts as successful.
 
 An update is considered finished once the camera reports “finished” and is reachable again;
 otherwise it is aborted after 30 minutes.
