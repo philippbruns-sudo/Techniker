@@ -7,6 +7,26 @@ Raspberry Pi + Tablet zum automatischen Einrichten von ARVOO-Ruby-Kameras.
                                   Oberfläche          nur Konfig, kein Gateway
 ```
 
+## Netzwerk am Pi
+
+Das Firmen-WLAN nutzt **192.168.8.0/24** – denselben Bereich wie die Kameras nach dem Backup.
+`pi/netz-einrichten.sh` löst das so:
+
+| eth0 bekommt | Zweck |
+|---|---|
+| `192.168.0.250/24` | Kameras im Werkszustand (`192.168.0.21`) |
+| `192.168.8.250/32` | nur Absender-Adresse, ohne Netz-Route (vorher geprüft, dass sie im WLAN frei ist) |
+| Host-Routen `192.168.8.21/32`, `192.168.8.22/32` | haben Vorrang vor dem WLAN-Netz; gesetzt per NetworkManager-Hook, sobald ein Kabel steckt |
+
+Alles andere in 192.168.8.x läuft weiter über das WLAN. Zusätzlich antwortet der Pi
+per ARP-Einstellung im WLAN nicht für `192.168.8.250`.
+
+```bash
+sudo bash ~/Techniker/kamera-setup/pi/netz-einrichten.sh            # einrichten
+sudo bash ~/Techniker/kamera-setup/pi/netz-einrichten.sh --check    # prüfen (Kamera eingesteckt)
+sudo bash ~/Techniker/kamera-setup/pi/netz-einrichten.sh --remove   # rückgängig
+```
+
 ## Ablauf pro Kamera
 
 | # | Schritt | Kamera-API |
