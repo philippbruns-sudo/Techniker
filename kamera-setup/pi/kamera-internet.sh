@@ -77,8 +77,9 @@ case "$1" in
         ok "$DNSMASQ_CONF"
 
         echo "2) Pakete (nftables, dnsmasq)"
-        if ! command -v nft >/dev/null || ! command -v dnsmasq >/dev/null; then
-            apt-get install -y nftables dnsmasq >/dev/null || fail "Installation fehlgeschlagen (apt update?)"
+        if ! command -v nft >/dev/null || ! dpkg -s dnsmasq >/dev/null 2>&1; then
+            apt-get update >/dev/null
+            apt-get install -y nftables dnsmasq >/dev/null || fail "Installation fehlgeschlagen (Internet am Pi?)"
         fi
         ok "installiert"
 

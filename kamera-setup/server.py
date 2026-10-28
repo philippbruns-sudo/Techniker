@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.4.5'
+VERSION = '0.4.6'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -318,6 +318,10 @@ def internet_problem():
         socket.create_connection(('1.1.1.1', 443), timeout=4).close()
     except OSError:
         return 'Pi selbst hat kein Internet'
+    try:
+        socket.create_connection((config['factory_gateway'], 53), timeout=3).close()
+    except OSError:
+        return 'DNS (dnsmasq) läuft nicht'
     return None
 
 
