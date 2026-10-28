@@ -67,7 +67,7 @@ MESSAGES = {
 }
 
 UPDATE_FORMATS = ['json', 'json_string', 'form', 'query', 'json_raw', 'text', 'raw', 'none']
-MAX_UPDATE_ROUNDS = 5
+UPDATE_ROUNDS = 2
 PHASES = ('starting', 'downloading', 'installing', 'finished')
 
 DEMO = False
@@ -307,20 +307,12 @@ def client_for(cam):
     return (FakeCamera if DEMO else CameraClient)(cam['ip'], cam.get('password'))
 
 
-def available_version(value, current):
+def offered_update(value):
     if isinstance(value, dict):
-        value = value.get('update_available') or value.get('version')
+        value = value.get('update_available')
     if not value or str(value).strip().lower() in ('false', 'none', 'no', '0', 'null'):
         return None
-    m = re.search(r'\d+(?:\.\d+)+', str(value))
-    version = m.group(0) if m else str(value).strip()
-    return version if version_key(version) != version_key(current) else None
-
-
-def version_key(value):
-    nums = re.findall(r'\d+', str(value or ''))
-    return tuple(int(n) for n in nums) if nums else None
-
+    return str(value).strip()
 
 
 def set_cam(ip, **fields):
@@ -340,10 +332,8 @@ def check(ip):
     answer = api.call('POST', '/system/actions/check_update')
     info = api.call('GET', '/system/info')
     current = info.get('version')
-    avail = available_version(answer, current) or available_version(info.get('update_available'), current)
-    raw = answer.get('update_available') if isinstance(answer, dict) else answer
-    raw = raw if available_version(raw, current) else info.get('update_available')
-    set_cam(ip, update_raw=str(raw).strip() if avail and raw else None)
+    avail = offered_update(answer)
+    set_cam(ip, update_raw=avail)
     set_cam(ip, version=current, update_available=avail, last_check=now(),
             status='available' if avail else 'current',
             detail=detail('available', avail) if avail else detail('current'))
@@ -382,25 +372,23 @@ def run_update(ip):
                 entry.update(version_after=before or '', result=RESULT_CURRENT)
                 return
 
-            chain = [before]
+            rounds = []
             fmt = None
-            for _ in range(MAX_UPDATE_ROUNDS):
+            for round_no in range(1, UPDATE_ROUNDS + 1):
+                if not avail:
+                    break
                 set_cam(ip, status='updating', detail=detail('starting_update', avail), progress=0)
-                raw = cameras[ip].get('update_raw') or avail
-                fmt = perform_update(ip, api, avail, raw)
-                version = wait_for_update(ip, api, chain[-1], avail)
-                chain.append(version)
-                entry.update(version_after=version, message='Format: %s · %s' % (fmt, ' → '.join(chain)))
-                set_cam(ip, version=version, last_update=now())
+                fmt = perform_update(ip, api, avail, avail)
+                wait_update_done(ip, api)
+                rounds.append(avail)
+                set_cam(ip, last_update=now())
                 set_cam(ip, status='updating', detail=detail('rechecking'), progress=None)
                 api, info, avail = recheck(ip)
-                if not avail or any(version_key(avail) == version_key(v) for v in chain):
-                    break
-            else:
-                raise CameraError('too_many_rounds', MAX_UPDATE_ROUNDS)
-            entry.update(result=RESULT_SUCCESS)
-            set_cam(ip, version=chain[-1], update_available=None, status='current',
-                    detail=detail('updated', chain[-1]), progress=None)
+            final = info.get('version')
+            entry.update(version_after=final or '', result=RESULT_SUCCESS,
+                         message='Format: %s · %s' % (fmt, ' · '.join('round %d: %s' % (i + 1, v) for i, v in enumerate(rounds))))
+            set_cam(ip, version=final, update_available=avail, status='available' if avail else 'current',
+                    detail=detail('updated', final), progress=None)
         except CameraError as e:
             entry.update(result=RESULT_FAILED, message=str(e))
             set_cam(ip, progress=None, **error_fields(e))
@@ -471,47 +459,32 @@ def perform_update(ip, api, version, raw):
     raise CameraError('all_formats_rejected', ', '.join(tried), code=400)
 
 
-def wait_for_update(ip, api, before, target):
+def wait_update_done(ip, api):
     started = time.time()
     deadline = started + config['update_timeout_min'] * 60
-    candidate, seen, active, stalled = None, 0, False, 0
+    active, ready = False, 0
     while time.time() < deadline:
         time.sleep(1 if DEMO else 4)
-        phase = None
         try:
             prog = api.call('GET', '/system/info/update_progress')
-        except CameraError:
-            set_cam(ip, detail=detail('rebooting'), progress=None)
-            candidate, seen, active = None, 0, True
-            continue
-        if isinstance(prog, dict):
-            if prog.get('error'):
-                raise CameraError('update_error')
-            phase = prog.get('phase') or 'running'
-            if phase in ('starting', 'downloading', 'installing'):
-                active = True
-            pct = prog.get('percent')
-            set_cam(ip, detail=detail('phase', phase), progress=pct if isinstance(pct, (int, float)) else None)
-        try:
             info = api.call('GET', '/system/info')
-        except CameraError:
+        except CameraError as e:
+            if e.code and 400 <= e.code < 500:
+                raise
+            set_cam(ip, detail=detail('rebooting'), progress=None)
+            active, ready = True, 0
             continue
-        version = info.get('version') if isinstance(info, dict) else None
-        if version and version_key(version) == version_key(target):
-            return version
-        if version and version != before and not info.get('software_down'):
-            seen = seen + 1 if version == candidate else 1
-            candidate = version
-            if seen >= 4:
-                return version
-        else:
-            candidate, seen = None, 0
-        unchanged = version == before and not info.get('software_down')
-        stalled = stalled + 1 if unchanged and phase == 'finished' and active else 0
-        if stalled >= 15:
-            raise CameraError('not_applied', before, target)
-        if unchanged and not active and time.time() - started > (20 if DEMO else 180):
-            raise CameraError('not_starting', target, before)
+        phase = prog.get('phase') if isinstance(prog, dict) else None
+        if isinstance(prog, dict) and prog.get('error'):
+            raise CameraError('update_error')
+        if phase in ('starting', 'downloading', 'installing'):
+            active, ready = True, 0
+        pct = prog.get('percent') if isinstance(prog, dict) else None
+        set_cam(ip, detail=detail('phase', phase or 'running'), progress=pct if isinstance(pct, (int, float)) else None)
+        settled = phase == 'finished' and not (isinstance(info, dict) and info.get('software_down'))
+        ready = ready + 1 if settled and (active or time.time() - started > (8 if DEMO else 60)) else 0
+        if ready >= 3:
+            return
     raise CameraError('timeout', config['update_timeout_min'])
 
 

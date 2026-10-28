@@ -66,13 +66,12 @@ button in the top right corner. The choice is remembered in the browser.
 | Track progress | `GET /system/info/update_progress` |
 | Wait for the reboot, confirm the new version | `GET /system/info` |
 
-**Whatever ARVOO offers is installed** – even if the version number is lower. After each update
-the tool checks again and keeps updating until nothing more is offered; a version that was already
-installed in the same run is not installed again.
+The tool runs **two rounds**: ask for an update, and if one is offered, install it.
+Version numbers are ignored – whatever ARVOO offers is installed. After the second round
+the tool stops checking.
 
-An update only counts as **successful** once the camera reports the offered version after the reboot.
-If the camera reports “update finished” but stays on the old version, it is reported after about one
-minute; otherwise the update is aborted after 30 minutes.
+An update is considered finished once the camera reports “finished” and is reachable again;
+otherwise it is aborted after 30 minutes.
 
 The cameras need **internet access** to the ARVOO server, because they download the
 firmware themselves.
