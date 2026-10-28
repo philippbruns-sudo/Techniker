@@ -174,7 +174,8 @@ function render() {
 
   document.getElementById('log').innerHTML = s.http_log.map(function(e) {
     var good = typeof e.status === 'number' && e.status < 300;
-    return '<tr><td class="mono">' + esc(e.time.slice(11)) + '</td><td class="mono"><b>' + esc(e.method) + '</b> ' + esc(e.url.replace(/^http:\/\/[^/]+/, '')) +
+    var rep = e.repeat ? '<div class="hint">' + e.repeat + '× bis ' + esc((e.last || '').slice(11)) + '</div>' : '';
+    return '<tr><td class="mono">' + esc(e.time.slice(11)) + rep + '</td><td class="mono"><b>' + esc(e.method) + '</b> ' + esc(e.url.replace(/^http:\/\/[^/]+/, '')) +
       '<div class="hint">' + esc(e.url.match(/^http:\/\/([^/]+)/)[1]) + '</div></td><td class="mono resp">' + esc(e.sent) +
       '</td><td class="' + (good ? 'st-ok' : 'st-bad') + '">' + esc(e.status) + '</td><td class="mono resp">' + esc(e.response) + '</td></tr>';
   }).join('') || '<tr><td colspan="5" class="hint">Noch keine Anfragen.</td></tr>';

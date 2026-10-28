@@ -15,7 +15,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.1.2'
+VERSION = '0.1.3'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -161,10 +161,15 @@ class Camera:
             return text
 
     def _log(self, entry, quiet):
-        if not quiet:
-            with lock:
-                self.http_log.append(entry)
-                del self.http_log[:-200]
+        with lock:
+            if quiet:
+                same = next((e for e in reversed(self.http_log) if e['url'] == entry['url'] and e['method'] == entry['method']), None)
+                if same and same['status'] == entry['status'] and same['response'] == entry['response']:
+                    same['repeat'] = same.get('repeat', 1) + 1
+                    same['last'] = entry['time']
+                    return
+            self.http_log.append(entry)
+            del self.http_log[:-200]
 
 
 def clean(text):
@@ -373,29 +378,41 @@ class Job:
         raise StepError('Update-Prüfung nicht möglich – Kamera antwortet nicht')
 
     def wait_for_update(self, api, before, target, prefix):
-        deadline = time.time() + config['update_timeout_min'] * 60
+        started = time.time()
+        deadline = started + config['update_timeout_min'] * 60
         phases = {'starting': 'Startet', 'downloading': 'Lädt herunter', 'installing': 'Installiert', 'finished': 'Abgeschlossen'}
+        candidate, seen = None, 0
         while time.time() < deadline:
             self.sleep(4)
+            elapsed = '%d:%02d min' % divmod(int(time.time() - started), 60)
             try:
                 prog = api.call('GET', '/system/info/update_progress', quiet=True)
                 if isinstance(prog, dict):
                     if prog.get('error'):
                         raise StepError('Update auf %s fehlgeschlagen (update_progress meldet Fehler)' % target)
                     pct = prog.get('percent')
-                    self.set('firmware', detail='%s%s %s ...' % (prefix, phases.get(prog.get('phase'), prog.get('phase') or 'Läuft'), target),
+                    self.set('firmware', detail='%s%s %s ... (%s)' % (prefix, phases.get(prog.get('phase'), prog.get('phase') or 'Läuft'), target, elapsed),
                              progress=pct if isinstance(pct, (int, float)) else None)
                 info = api.call('GET', '/system/info', quiet=True)
             except StepError as e:
                 if e.code and 400 <= e.code < 500:
                     raise
-                self.set('firmware', detail='%sKamera startet neu ...' % prefix, progress=None)
+                self.set('firmware', detail='%sKamera startet neu ... (%s)' % (prefix, elapsed), progress=None)
+                candidate, seen = None, 0
                 continue
             version = info.get('version') if isinstance(info, dict) else None
-            if version and version != before:
+            if version and version_of(version) == target:
                 self.set('firmware', progress=None)
                 return version
-        raise StepError('Zeitüberschreitung: Version nach %d min unverändert' % config['update_timeout_min'])
+            if version and version != before and not info.get('software_down'):
+                seen = seen + 1 if version == candidate else 1
+                candidate = version
+                if seen >= 4:
+                    self.set('firmware', progress=None)
+                    return version
+            else:
+                candidate, seen = None, 0
+        raise StepError('Zeitüberschreitung: nach %d min nicht auf %s (zuletzt: %s)' % (config['update_timeout_min'], target, candidate or before))
 
     def do_password(self):
         new = config.get('new_password')
