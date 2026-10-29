@@ -226,6 +226,14 @@
       border-width: clamp(6px, 0.6vw, 10px);
       margin: 0 auto 22px auto;
     }
+    .current-step .spin-wrap {
+      position: relative; width: clamp(70px, 7vw, 120px); height: clamp(70px, 7vw, 120px); margin: 0 auto 22px auto;
+    }
+    .current-step .spin-wrap .spinner.light { position: absolute; inset: 0; width: auto; height: auto; margin: 0; }
+    .current-step .spin-wrap span {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+      padding: 0 16%; color: #002d56; font-weight: 700; line-height: 1.1; font-size: clamp(11px, 0.95vw, 16px);
+    }
     .current-step small { display: block; font-size: clamp(12px, 0.9vw, 15px); color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
     .current-step h2 { margin: 6px 0 8px 0; color: #002d56; font-size: clamp(22px, 2.2vw, 36px); }
     .current-step p { margin: 0; color: #c26100; font-weight: 600; font-size: clamp(14px, 1.1vw, 19px); min-height: 1.4em; }
@@ -458,7 +466,7 @@
       <!-- 2. Einrichtung läuft -->
       <div id="screenRunning" class="screen">
         <div class="current-step">
-          <div class="spinner light"></div>
+          <div class="spin-wrap"><div class="spinner light"></div><span id="currentModel"></span></div>
           <small id="currentNum">Schritt 1 von 8</small>
           <h2 id="currentLabel">-</h2>
           <p id="currentDetail"></p>
@@ -686,6 +694,7 @@ function render(s) {
     if (cur) {
       document.getElementById('currentNum').innerText = 'Schritt ' + (idx + 1) + ' von ' + steps.length;
       document.getElementById('currentLabel').innerText = cur.label;
+      document.getElementById('currentModel').innerText = (s.camera && s.camera.model) || '';
       document.getElementById('currentDetail').innerText = cur.detail || '';
       var bar = document.getElementById('currentProgress');
       bar.classList.toggle('show', typeof cur.progress === 'number');
@@ -965,6 +974,7 @@ var demo = (function() {
     var mac = ['00', '1A', '2B', hex(2), hex(2), hex(2)].join(':');
     return {
       mac: mac,
+      model: 'Ruby LR',
       serial: 'RB-' + (23 + Math.floor(Math.random() * 3)) + '-' + String(Math.floor(Math.random() * 99999)).padStart(5, '0'),
       version_before: opts.firmwareCurrent ? LATEST : OLD_VERSIONS[Math.floor(Math.random() * OLD_VERSIONS.length)]
     };
@@ -1061,7 +1071,7 @@ var demo = (function() {
     st.detail = fmt(STEPS[i][3]);
     var c = s.camera;
     if (st.key === 'login') {
-      c.mac = s.pending.mac; c.serial = s.pending.serial; c.version_before = s.pending.version_before;
+      c.mac = s.pending.mac; c.serial = s.pending.serial; c.model = s.pending.model; c.version_before = s.pending.version_before;
       st.detail = 'Passwort aus MAC …' + c.mac.slice(-5).replace(':', '') + ' abgeleitet';
     }
     if (st.key === 'name') c.name = profile().name;
