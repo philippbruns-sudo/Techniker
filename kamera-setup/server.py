@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.4.8'
+VERSION = '0.4.9'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -683,7 +683,15 @@ class Job:
     def do_name(self):
         name = profile()['name']
         api = self.api()
-        api.call('POST', '/system/settings/', {'name': name})
+        for attempt in range(12):
+            try:
+                api.call('POST', '/system/settings/', {'name': name})
+                break
+            except StepError as e:
+                if e.code != 400 or attempt == 11:
+                    raise
+                self.set('name', detail='Kamera noch nicht bereit – neuer Versuch in 5 s (%d/11) ...' % (attempt + 1))
+                self.sleep(5)
         result = api.call('GET', '/system/settings/')
         actual = result.get('name') if isinstance(result, dict) else None
         if actual != name:
