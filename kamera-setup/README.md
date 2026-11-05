@@ -167,10 +167,11 @@ Damit man nicht ständig auf den Bildschirm schauen muss:
 | Ereignis | Ton |
 |---|---|
 | Kamera erkannt, Einrichtung startet | kurzer Doppel-Piep |
-| Einrichtung erfolgreich | aufsteigender Dreiklang |
+| Einrichtung erfolgreich | Ansage `frontend/sounds/fertig.mp3` (fehlt sie, aufsteigender Dreiklang) |
 | Fehler | tiefer Warnton, **wiederholt alle 30 s**, bis jemand den Bildschirm berührt |
 
-Die Töne werden im Browser erzeugt (Web Audio), es gibt keine Sounddateien.
+Die Töne werden im Browser erzeugt (Web Audio); nur die Erfolgs-Ansage ist eine MP3-Datei. Zum Austauschen
+einfach `frontend/sounds/fertig.mp3` ersetzen und die Seite neu laden.
 Der Schalter oben rechts schaltet den Ton an/aus (wird gespeichert).
 Browser geben Ton erst nach der ersten Berührung frei – bis dahin blinkt der Schalter
 orange („Antippen für Ton“). Im Fully Kiosk Browser lässt sich das über die Einstellung

@@ -987,6 +987,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_file('frontend/index.html', 'text/html; charset=utf-8')
         if path in ('/test', '/test.html'):
             return self.send_file('frontend/test.html', 'text/html; charset=utf-8')
+        if path == '/sounds/fertig.mp3' and os.path.exists(os.path.join(BASE_DIR, 'frontend/sounds/fertig.mp3')):
+            return self.send_file('frontend/sounds/fertig.mp3', 'audio/mpeg')
         if path == '/api/status':
             return self.send_json(public_status())
         if path == '/api/test/state':

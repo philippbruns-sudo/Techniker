@@ -802,7 +802,23 @@ var sound = (function() {
   var enabled = true;
   var repeatTimer = null;
 
+  var successData = null;
+  var successBuffer = null;
+
   try { enabled = localStorage.getItem('soundEnabled') !== '0'; } catch (e) {}
+
+  // Eigene Ansage für „fertig“; fehlt die Datei, bleibt der Dreiklang
+  try {
+    fetch('sounds/fertig.mp3').then(function(r) { return r.ok ? r.arrayBuffer() : null; })
+      .then(function(data) { successData = data; }).catch(function() {});
+  } catch (e) {}
+
+  function playBuffer(buffer) {
+    var src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ctx.destination);
+    src.start();
+  }
 
   function context() {
     if (!ctx) {
@@ -836,8 +852,17 @@ var sound = (function() {
       tone(880, 0, 0.12, 'sine', 0.5);
       tone(1320, 0.14, 0.15, 'sine', 0.5);
     },
-    // Aufsteigender Dreiklang: Kamera fertig
+    // Kamera fertig: eigene Ansage, sonst aufsteigender Dreiklang
     success: function() {
+      if (successBuffer) return playBuffer(successBuffer);
+      if (successData) {
+        var data = successData;
+        successData = null;
+        return ctx.decodeAudioData(data, function(buffer) { successBuffer = buffer; playBuffer(buffer); }, function() { SOUNDS.chime(); });
+      }
+      SOUNDS.chime();
+    },
+    chime: function() {
       [523.25, 659.25, 783.99].forEach(function(f, i) { tone(f, i * 0.13, 0.3, 'triangle', 0.6); });
       tone(1046.5, 0.39, 0.8, 'triangle', 0.6);
     },
