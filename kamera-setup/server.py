@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-VERSION = '0.4.9'
+VERSION = '0.4.10'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -559,8 +559,6 @@ class Job:
             results.append('%s%s installiert' % (prefix, offered))
         info = self.wait_reachable(api)
         self.cam(version_after=info.get('version'))
-        if all('kein Update' in r for r in results):
-            self.set('firmware', status='skipped')
         return ' · '.join(results) + ' · jetzt %s' % info.get('version')
 
     def wait_reachable(self, api, step='firmware', path='/system/info', minutes=5):
@@ -589,7 +587,6 @@ class Job:
 
     def check_for_update(self, api):
         self.update_note = ''
-        no_update = 0
         for attempt in range(8):
             try:
                 answer = api.call('POST', '/system/actions/check_update', timeout=60)
@@ -606,12 +603,7 @@ class Job:
             offered = str(offered or '').strip()
             if re.match(r'^v?\d+(\.\d+)+\S*$', offered):
                 return offered
-            no_update += 1
-            self.update_note = ' (Antwort: %s)' % clean(json.dumps(answer, ensure_ascii=False))[:80]
-            if no_update >= 3:
-                return None
-            self.set('firmware', detail='Kamera meldet kein Update – frage in 20 s erneut (%d/3) ...' % no_update)
-            self.sleep(20)
+            return None
         self.update_note = ' (Update-Prüfung nicht möglich)'
         return None
 

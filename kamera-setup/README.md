@@ -124,7 +124,7 @@ entspricht der MAC ohne Doppelpunkte.
 | 7 | Auf neuer IP warten, alle Abschnitte mit Backup vergleichen | `GET` je Abschnitt | ✅ bestätigt |
 | 8 | Abschlussprüfung: Version, Name | `GET /system/info`, `/system/settings/` | ✅ bestätigt |
 
-Bietet die Kamera nichts an, ist der Schritt fertig (übersprungen). Meldet die Kamera beim Update
+Bietet die Kamera nichts an, wird der Schritt ohne erneute Nachfrage grün abgehakt. Meldet die Kamera beim Update
 einen Fehler, gilt das als „von Kamera abgelehnt“ – kein Abbruch, es geht normal weiter. Danach wird
 nicht erneut geprüft. Ein Update gilt als fertig, sobald die Kamera „finished“ meldet und wieder
 erreichbar ist (spätestens nach 30 Minuten Abbruch).
