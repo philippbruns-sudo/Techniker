@@ -188,6 +188,15 @@
       transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
       z-index: 1000;
     }
+    .zoho-banner {
+      background: #fff4ec;
+      border-left: 4px solid #ff6600;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: #4a5568;
+    }
     .toast.show { transform: translateY(0); opacity: 1; }
     .toast.success { background-color: #4caf50; }
     .toast.error { background-color: #e53e3e; }
@@ -208,7 +217,12 @@
   </div>
   
   <div class="admin-body">
+    <div id="zohoBanner" class="zoho-banner" style="display:none;">
+      📥 Daten aus Zoho übernommen (Deal <span id="zohoBannerId"></span>) – bitte prüfen, UK hochladen und speichern.
+    </div>
     <form id="projectForm">
+      <input type="hidden" id="zohoId">
+      <input type="hidden" id="zohoData">
       <div class="form-grid">
         
         <div class="form-group">
@@ -302,8 +316,34 @@
     }
   });
 
+  // Vorbefüllung aus Zoho (Tampermonkey öffnet ?page=admin&src=zoho&name=...&...)
+  var FIELD_MAP = {
+    name: 'projectName',
+    id: 'projectId',
+    adresse: 'projectAddress',
+    ansprechpartner: 'projectContact',
+    telefon: 'projectPhone',
+    email: 'projectEmail',
+    notizen: 'projectNotes',
+    zohoId: 'zohoId',
+    zoho: 'zohoData'
+  };
+
+  google.script.url.getLocation(function(location) {
+    var p = location.parameter || {};
+    if (p.src !== 'zoho') return;
+    Object.keys(FIELD_MAP).forEach(function(key) {
+      if (p[key]) document.getElementById(FIELD_MAP[key]).value = p[key];
+    });
+    document.getElementById('zohoBannerId').innerText = p.zohoId || '';
+    document.getElementById('zohoBanner').style.display = 'block';
+  });
+
   function resetForm() {
     document.getElementById('projectForm').reset();
+    document.getElementById('zohoId').value = '';
+    document.getElementById('zohoData').value = '';
+    document.getElementById('zohoBanner').style.display = 'none';
     dropZoneText.style.display = 'block';
     fileNameDisplay.style.display = 'none';
     fileNameDisplay.innerText = '';
@@ -328,6 +368,8 @@
       email: document.getElementById('projectEmail').value.trim(),
       adresse: document.getElementById('projectAddress').value.trim(),
       notizen: document.getElementById('projectNotes').value.trim(),
+      zohoId: document.getElementById('zohoId').value.trim(),
+      zohoData: document.getElementById('zohoData').value,
       ukFile: null // Standardmäßig leer
     };
     

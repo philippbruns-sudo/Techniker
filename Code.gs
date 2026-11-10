@@ -139,6 +139,19 @@ function saveNewProject(data) {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Projektliste');
     var lastRow = sheet.getLastRow();
     var newRow = lastRow + 1;
+
+    // Doppelte Übernahme desselben Zoho-Deals verhindern (Spalte J)
+    if (data.zohoId && lastRow >= 2) {
+      var existingIds = sheet.getRange(2, 10, lastRow - 1, 1).getValues();
+      for (var i = 0; i < existingIds.length; i++) {
+        if (existingIds[i][0].toString().trim() === data.zohoId) {
+          return {
+            status: 'error',
+            message: 'Dieser Zoho-Deal ist bereits angelegt (Zeile ' + (i + 2) + ').'
+          };
+        }
+      }
+    }
     
     var finalUkLink = "";
     
@@ -161,7 +174,7 @@ function saveNewProject(data) {
       finalUkLink = file.getUrl();
     }
     
-    // Bereite das Array für die Spalten B bis I vor
+    // Bereite das Array für die Spalten B bis K vor
     var rowData = [
       data.name,            // Spalte B: Projektname
       data.id,              // Spalte C: Ordner ID
@@ -170,11 +183,13 @@ function saveNewProject(data) {
       data.telefon,         // Spalte F: Telefon
       data.email,           // Spalte G: Email
       data.adresse,         // Spalte H: Adresse
-      data.notizen          // Spalte I: Notizen
+      data.notizen,         // Spalte I: Notizen
+      data.zohoId || "",    // Spalte J: Zoho CRM Record ID
+      data.zohoData || ""   // Spalte K: Alle Zoho-Felder als JSON (für spätere Schritte)
     ];
     
     // Füge die Daten in die nächste freie Zeile ab Spalte 2 (B) ein
-    sheet.getRange(newRow, 2, 1, 8).setValues([rowData]);
+    sheet.getRange(newRow, 2, 1, 10).setValues([rowData]);
     
     return {
       status: 'success',
